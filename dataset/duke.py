@@ -8,45 +8,68 @@ import numpy as np
 from torch.utils.data import Dataset
 import random
 import config
+from transform.transform import GeometricTnf
 
 class Duke(Dataset):
     
     def __init__(self, 
                  csv_file, 
                  dataset_path, 
-                 image_size=(config.IMAGE_HEIGHT, config.IMAGE_WIDTH)): 
+                 image_size=(config.IMAGE_HEIGHT, config.IMAGE_WIDTH),
+                 transform=None,
+                 random_crop=False): 
 
         self.image_height, self.image_width = image_size
         self.csv = pd.read_csv(csv_file)
         self.image_names = self.csv.iloc[:,0]
         self.image_labels = self.csv.iloc[:,1]
         self.dataset_path = dataset_path 
+        self.random_crop = random_crop
+        self.transform = transform
+        self.affineTnf = GeometricTnf(out_h=self.image_height, 
+                                      out_w=self.image_width, 
+                                      use_cuda=False) 
  
     def __len__(self):
         return len(self.csv)
 
     def __getitem__(self, idx):
         image = self.get_image(self.image_names, idx)
-        label = self.get_label(self.image_labels,idx)
-
-        if random.random() > 0.5:
-            image = np.fliplr(image) 
+        label = self.get_label(self.image_labels, idx)
 
         database = {'image': image, 
                     'label': label}
 
+        if self.transform:
+            database = self.transform(database)
+        
         return database
 
     def get_image(self, image_list, idx):
         image_name = os.path.join(self.dataset_path, image_list[idx])
         image = io.imread(image_name)
-        
+
+        if self.random_crop:
+            h,w,c = image.shape
+            top = np.random.randint(h/4)
+            bottom = int(3*h/4+np.random.randint(h/4))
+            left = np.random.randint(w/4)
+            right = int(3*w/4+np.random.randint(w/4))
+            image = image[top:bottom, left:right, :]
+ 
+        if random.random() > 0.5:
+            image = np.flip(image, 1) 
+
         image = np.expand_dims(image.transpose((2,0,1)),0)
         image = torch.Tensor(image.astype(np.float32))
-
+        image_var = Variable(image, requires_grad=False)
+        image = self.affineTnf(image_var).data.squeeze(0)
+        
         return image
  
     def get_label(self, label_list, idx):
         label = label_list[idx]
-        label = torch.Tensor(label.astype(np.float32))
+        one_hot = np.zeros(config.CLASS_NUM)
+        one_hot[label] = 1
+        label = torch.Tensor(one_hot)
         return label

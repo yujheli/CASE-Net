@@ -134,40 +134,12 @@ class Decoder(nn.Module):
             block5 = self.block5(block4)
             return block5
 
-class Discriminator(nn.Module):
-    def __init__(self,
-                 output_dim=2):
-        super(Discriminator, self).__init__()
-
-        self.block = nn.Sequential(
-            nn.Conv2d(3, 64, kernel_size=4, stride=2, padding=1),
-            nn.BatchNorm2d(64),
-            nn.LeakyReLU(negative_slope=0.2, inplace=True),
-            nn.Conv2d(64, 128, kernel_size=4, stride=2, padding=1),
-            nn.BatchNorm2d(128),
-            nn.LeakyReLU(negative_slope=0.2, inplace=True),
-            nn.Conv2d(128, 256, kernel_size=4, stride=2, padding=1),
-            nn.BatchNorm2d(256),
-            nn.LeakyReLU(negative_slope=0.2, inplace=True),
-            nn.Conv2d(256, 512, kernel_size=4, stride=2, padding=1),
-            nn.BatchNorm2d(512),
-            nn.LeakyReLU(negative_slope=0.2, inplace=True),
-            nn.Conv2d(512, 4, kernel_size=4, stride=2, padding=1),
-            nn.Upsample(scale_factor=32, mode='bilinear', align_corners=True),
-            nn.Softmax(dim=1)
-        )
-
-    def forward(self, data):
-        output = self.block(data)
-        return output
-
 class AdaptReID(nn.Module):
     def __init__(self,
                  backbone='resnet-101',
                  skip_connection=config.SKIP_CONNECTION,
                  classifier_input_dim=2048,
                  classifier_output_dim=config.CLASS_NUM,
-                 discriminator_output_dim=2,
                  use_cuda=True):
         super(AdaptReID, self).__init__()
 
@@ -179,15 +151,12 @@ class AdaptReID(nn.Module):
         self.classifier = Classifier(input_dim=classifier_input_dim,
                                      output_dim=classifier_output_dim)
 
-        self.discriminator = Discriminator(output_dim=discriminator_output_dim)
-
         self.skip_connection = skip_connection
 
         if use_cuda:
             self.extractor = self.extractor.cuda()
             self.decoder = self.decoder.cuda()
             self.classifier = self.classifier.cuda()
-            self.discriminator = self.discriminator.cuda()
 
     def forward(self, data):
 
@@ -197,9 +166,7 @@ class AdaptReID(nn.Module):
 
         reconstruct = self.decoder(features=features)
 
-        discriminator_output = self.discriminator(data=reconstruct)
-
-        return features, cls_vector, reconstruct, discriminator_output
+        return features, cls_vector, reconstruct
 
  
 if __name__ == '__main__':
@@ -217,16 +184,11 @@ if __name__ == '__main__':
     decoder = Decoder(backbone='resnet-101')
     reconstruct = decoder(features=feature)
     print('decoder output:', reconstruct.size())
-
-    discriminator = Discriminator()
-    output = discriminator(reconstruct)
-    print('discriminator output:', output.size())
     '''
 
     model = AdaptReID()
-    f, cls, rec, dis = model(data)
+    f, cls, rec = model(data)
     for idx in range(len(f)):
         print('feature size:', f[idx].size())
     print('classifier output size:', cls.size())
     print('reconstruction output size:', rec.size())
-    print('discriminator output size:', dis.size())
