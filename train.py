@@ -42,29 +42,9 @@ def loss_cls(pred, gt, use_cuda=True):
     return loss
 
 
-def adv_loss_calc(pred, gt):
+def loss_adv(pred, gt):
     criterion = nn.BCEWithLogitsLoss()
-    adv_loss = criterion(pred, gt)
-    loss = args.w_adv * adv_loss
-    return loss
-
-
-def model_loss_calc(cls_vector, label, latent_feature, reconstruct, image, use_cuda=True):
-
-    loss = 0
-
-    if args.cls_loss:
-        cls_loss = loss_cls(pred=cls_vector, gt=label, use_cuda=use_cuda)
-        loss += args.w_cls * cls_loss
-    
-    if args.contra_loss:
-        contra_loss = loss_contra(pred=latent_feature, gt=label)
-        loss += args.w_contra * contra_loss
-
-    if args.rec_loss:
-        rec_loss = loss_rec(pred=reconstruct, gt=image, use_cuda=use_cuda)
-        loss += args.w_rec * rec_loss
-
+    loss = criterion(pred, gt)
     return loss
 
 
@@ -102,7 +82,7 @@ def main():
     model = AdaptReID(use_cuda=use_cuda,
                       classifier_output_dim=classifier_output_dim)
     if args.model_path:
-        print('load pretrained model...')
+        print("loading pretrained model...")
         checkpoint = torch.load(args.model_path, map_location=lambda storage, loc: storage)
         for name, param in model.extractor.state_dict().items():
             model.extractor.state_dict()[name].copy_(checkpoint['state_dict']['extractor.' + name])    
@@ -116,7 +96,7 @@ def main():
     discriminator = Discriminator(use_cuda=use_cuda,
                                   output_dim=1)
     if args.discriminator_path:
-        print('load pretrained discriminator...')
+        print("loading pretrained discriminator...")
         checkpoint = torch.load(args.discriminator_path, map_location=lambda storage, loc: storage)
         for name, param in discriminator.state_dict().items():
             discriminator.state_dict()[name].copy_(checkpoint['state_dict']['discriminator.' + name])
@@ -178,7 +158,21 @@ def main():
     source_label = 0
     target_label = 1
 
+    """ Fix Extractor """
+    for param in model.extractor.parameters():
+        param.requires_grad = False
+
+    """ Fix Decoder """
+    for param in model.decoder.parameters():
+        param.requires_grad = False
+
     for step in range(args.num_steps):
+
+        cls_loss_value = 0
+        rec_loss_value = 0
+        contra_loss_value = 0
+        adv_target_loss_value = 0
+        dis_loss_value = 0 # Discriminator's loss
 
         model_opt.zero_grad()
         adjust_model_lr(model_opt, step)
@@ -200,18 +194,27 @@ def main():
 
             latent_source, extracted_source, cls_source, rec_source = model(image)
 
-            model_loss = model_loss_calc(cls_vector=cls_source, 
-                                         label=label,
-                                         latent_feature=latent_source, 
-                                         reconstruct=rec_source, 
-                                         image=image, 
-                                         use_cuda=use_cuda)
+            loss = 0
 
-            print('model loss:', model_loss)
-            
-            model_loss.backward()
+            if args.cls_loss:
+                cls_loss = loss_cls(pred=cls_source, gt=label, use_cuda=use_cuda)
+                loss += args.w_cls * cls_loss
+                cls_loss_value += cls_loss.data.cpu().numpy() / args.iter_size
+    
+            if args.contra_loss:
+                contra_loss = loss_contra(pred=latent_source, gt=label)
+                loss += args.w_contra * contra_loss
+                contra_loss_value += contra_loss.data.cpu().numpy() / args.iter_size
 
+            if args.rec_loss:
+                rec_loss = loss_rec(pred=rec_source, gt=image, use_cuda=use_cuda)
+                loss += args.w_rec * rec_loss
+                rec_loss_value += rec_loss.data.cpu().numpy() / args.iter_size
 
+            loss = loss / args.iter_size
+            loss.backward()
+
+            '''
             """ Train Target Data """
             _, batch = target_iter.next()
 
@@ -223,11 +226,12 @@ def main():
             D_output = discriminator(extracted_target)
 
             tensor = Variable(torch.FloatTensor(D_output.data.size()).fill_(source_label)).cuda()
-            adv_loss = adv_loss_calc(D_output, tensor)
+            if args.adv_loss:
+                adv_loss = loss_adv(pred=D_output, gt=tensor)
+                adv_target_loss_value += adv_loss.data.cpu().numpy() / args.iter_size
 
-            #print('adv loss:', adv_loss)
-
-            adv_loss.backward()
+                loss = args.w_adv * adv_loss
+                loss.backward()
 
 
             """ Train Discriminator """
@@ -240,28 +244,47 @@ def main():
             D_output = discriminator(extracted_source)
 
             tensor = Variable(torch.FloatTensor(D_output.data.size()).fill_(source_label)).cuda()
-            adv_loss = adv_loss_calc(D_output, tensor)
+            if args.dis_loss:
+                dis_loss = loss_adv(pred=D_output, gt=tensor) / args.iter_size / 2
+                dis_loss_value += dis_loss.data.cpu().numpy()
 
-            #print('source adv loss:', adv_loss)
-
-            adv_loss.backward()
+                loss = args.w_dis * dis_loss
+                loss.backward()
 
 
             """ Train with Target Data """
             extracted_target = extracted_target.detach()
-            
+ 
             D_output = discriminator(extracted_target)
 
             tensor = Variable(torch.FloatTensor(D_output.data.size()).fill_(target_label)).cuda()
-            adv_loss = adv_loss_calc(D_output, tensor)
+            if args.dis_loss:
+                dis_loss = loss_adv(pred=D_output, gt=tensor) / args.iter_size / 2
+                dis_loss_value += dis_loss.data.cpu().numpy()
 
-            #print('target adv loss:', adv_loss)
-
-            adv_loss.backward()
+                loss = args.w_dis * dis_loss
+                loss.backward()
+            '''
 
         model_opt.step()
-        discriminator_opt.step()
+        #discriminator_opt.step()
 
+        print('[{0:4d}/{1:4d}] cls: {2:.3f} rec: {3:.3f} contra: {4:.3f} adv: {5:.3f} dis: {6:.3f}'.format(step+1, 
+            args.num_steps, cls_loss_value, rec_loss_value, contra_loss_value, adv_target_loss_value, dis_loss_value))
+
+        if step >= args.num_steps_stop - 1:
+            print('Saving model...')
+            model_path = os.path.join(args.model_dir, 'Model_Duke_{}.pth.tar'.format(args.num_steps))
+            discriminator_path = os.path.join(args.model_dir, 'Discriminator_Duke_{}.pth.tar'.format(args.num_steps))
+            torch.save(model.state_dict(), model_path)
+            torch.save(discriminator.state_dict(), discriminator_path)
+
+        if (step+1) % args.save_steps == 0:
+            print('Saving model...')
+            model_path = os.path.join(args.model_dir, 'Model_Duke_{}.pth.tar'.format(step+1))
+            discriminator_path = os.path.join(args.model_dir, 'Discriminator_Duke_{}.pth.tar'.format(step+1))
+            torch.save(model.state_dict(), model_path)
+            torch.save(discriminator.state_dict(), discriminator_path)
 
 if __name__ == '__main__':
     main()
