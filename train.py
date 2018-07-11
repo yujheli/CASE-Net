@@ -273,7 +273,7 @@ def main():
         model_opt.step()
         #discriminator_opt.step()
 
-        print('[{0:4d}/{1:4d}] cls: {2:.3f} rec: {3:.3f} contra: {4:.3f} adv: {5:.3f} dis: {6:.3f}'.format(step+1, 
+        print('[{0:6d}/{1:6d}] cls: {2:.3f} rec: {3:.3f} contra: {4:.3f} adv: {5:.3f} dis: {6:.3f}'.format(step+1, 
             args.num_steps, cls_loss_value, rec_loss_value, contra_loss_value, adv_target_loss_value, dis_loss_value))
 
         if step >= args.num_steps_stop - 1:
