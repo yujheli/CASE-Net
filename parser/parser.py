@@ -37,11 +37,11 @@ class ArgumentParser():
         train_params.add_argument('--rec-loss', type=str_to_bool, nargs='?', const=True, default=False, help='Use reconstruction loss?')        
         train_params.add_argument('--cls-loss', type=str_to_bool, nargs='?', const=True, default=False, help='Use classification loss?')        
         train_params.add_argument('--adv-loss', type=str_to_bool, nargs='?', const=True, default=False, help='Use adversarial loss?')        
-        train_params.add_argument('--triplet-loss', type=str_to_bool, nargs='?', const=True, default=False, help='Use triplet loss?')        
+        train_params.add_argument('--contra-loss', type=str_to_bool, nargs='?', const=True, default=False, help='Use contrastive loss?')        
         train_params.add_argument('--w-rec', type=float, default=0, help='weight for reconstruction loss')
         train_params.add_argument('--w-cls', type=float, default=0, help='weight for classification loss')
         train_params.add_argument('--w-adv', type=float, default=0, help='weight for adversarial loss')
-        train_params.add_argument('--w-triplet', type=float, default=0, help='weight for triplet loss')
+        train_params.add_argument('--w-contra', type=float, default=0, help='weight for contrastive loss')
         
     def parse(self, arg_str=None):
         if arg_str is None:

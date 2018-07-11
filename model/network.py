@@ -39,10 +39,12 @@ class Classifier(nn.Module):
                  output_dim=config.CLASS_NUM):
         super(Classifier, self).__init__()
         self.linear = nn.Linear(input_dim, output_dim)
+        self.softmax = nn.Softmax(dim=1)
 
     def forward(self, data):
         data = data.view(data.size()[0],-1)
-        features = self.linear(data)
+        out = self.linear(data)
+        features = self.softmax(out)
         return features
 
 class Decoder(nn.Module):
@@ -139,7 +141,7 @@ class AdaptReID(nn.Module):
                  backbone='resnet-101',
                  skip_connection=config.SKIP_CONNECTION,
                  classifier_input_dim=2048,
-                 classifier_output_dim=config.CLASS_NUM,
+                 classifier_output_dim=1812,
                  use_cuda=True):
         super(AdaptReID, self).__init__()
 
@@ -162,11 +164,14 @@ class AdaptReID(nn.Module):
 
         features = self.extractor(data=data)
 
-        cls_vector = self.classifier(data=features[-1])
+        latent_feature = features[-1]
+        extracted_feature = features[-2]
+
+        cls_vector = self.classifier(data=latent_feature)
 
         reconstruct = self.decoder(features=features)
 
-        return features, cls_vector, reconstruct
+        return latent_feature, extracted_feature, cls_vector, reconstruct
 
  
 if __name__ == '__main__':
@@ -186,9 +191,12 @@ if __name__ == '__main__':
     print('decoder output:', reconstruct.size())
     '''
 
+    extractor = Extractor(backbone='resnet-101')
+    print(extractor)
+    exit(-1)
     model = AdaptReID()
     f, cls, rec = model(data)
     for idx in range(len(f)):
         print('feature size:', f[idx].size())
-    print('classifier output size:', cls.size())
-    print('reconstruction output size:', rec.size())
+    #print('classifier output size:', cls.size())
+    #print('reconstruction output size:', rec.size())

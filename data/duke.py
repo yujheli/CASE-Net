@@ -11,19 +11,30 @@ import config
 from transform.transform import GeometricTnf
 
 class Duke(Dataset):
+    """
+        mode:
+            source: 702 (train) + [702 + 408] (test) different identities.
+            train:  702 different identities.
+            test:   702 + 408 different identities.
+        
+        label:
+            source:   0 ~ 1811
+            train:    0 ~  701
+            test:   702 ~ 1403
+    """
     
     def __init__(self, 
-                 csv_file, 
-                 dataset_path, 
+                 mode='source',
+                 dataset_path=config.DUKE_DIR,
                  image_size=(config.IMAGE_HEIGHT, config.IMAGE_WIDTH),
                  transform=None,
                  random_crop=False): 
 
         self.image_height, self.image_width = image_size
-        self.csv = pd.read_csv(csv_file)
+        self.dataset_path = dataset_path 
+        self.csv = self.get_csv(mode)
         self.image_names = self.csv.iloc[:,0]
         self.image_labels = self.csv.iloc[:,1]
-        self.dataset_path = dataset_path 
         self.random_crop = random_crop
         self.transform = transform
         self.affineTnf = GeometricTnf(out_h=self.image_height, 
@@ -44,6 +55,21 @@ class Duke(Dataset):
             database = self.transform(database)
         
         return database
+
+    def get_csv(self, mode):
+        if mode == 'source':
+            csv_path = os.path.join(self.dataset_path, 'all_list.csv')
+            self.class_num = 1812
+
+        elif mode == 'train':
+            csv_path = os.path.join(self.dataset_path, 'train_list.csv')
+            self.class_num = 702
+
+        else:
+            csv_path = os.path.join(self.dataset_path, 'test_list.csv')
+            self.class_num = 1110
+
+        return pd.read_csv(csv_path)
 
     def get_image(self, image_list, idx):
         image_name = os.path.join(self.dataset_path, image_list[idx])
@@ -69,7 +95,5 @@ class Duke(Dataset):
  
     def get_label(self, label_list, idx):
         label = label_list[idx]
-        one_hot = np.zeros(config.CLASS_NUM)
-        one_hot[label] = 1
-        label = torch.Tensor(one_hot)
+        label = Variable(torch.from_numpy(np.array(label, dtype='int32')).long())
         return label
