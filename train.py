@@ -187,7 +187,11 @@ def main():
                 param.requires_grad = False
 
             """ Train Source Data """
-            _, batch = source_iter.next()
+            try:
+                _, batch = source_iter.next()
+            except:
+                source_iter = enumerate(source_loader)
+                _, batch = source_iter.next()
 
             image = Variable(batch['image']).cuda()
             label = batch['label']
