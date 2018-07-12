@@ -75,9 +75,9 @@ def main():
 
     """ Initialize Model """
     if args.source_dataset == 'Duke':
-        classifier_output_dim = 1812
+        classifier_output_dim = config.DUKE_CLASS_DIM
     elif args.source_dataset == 'Market':
-        classifier_output_dim = 1501
+        classifier_output_dim = config.MARKET_CLASS_DIM
     
     model = AdaptReID(use_cuda=use_cuda,
                       classifier_output_dim=classifier_output_dim)
@@ -119,8 +119,9 @@ def main():
     elif args.target_dataset == 'Market':
         TargetData = Market
 
-    source_data = SourceData(mode='source',
-                             transform=NormalizeImage(['image']),
+    source_data = SourceData(mode='train',
+                             downsample_scale=None,
+                             transform=NormalizeImage(['image', 'rec_image']),
                              random_crop=args.random_crop)
 
     source_loader = DataLoader(source_data,
@@ -132,7 +133,8 @@ def main():
     source_iter = enumerate(source_loader)
 
     target_data = TargetData(mode='train',
-                             transform=NormalizeImage(['image']),
+                             downsample_scale=None,
+                             transform=NormalizeImage(['image', 'rec_image']),
                              random_crop=args.random_crop)
 
     target_loader = DataLoader(target_data,
@@ -148,6 +150,12 @@ def main():
     model_opt = optim.Adam(filter(lambda p: p.requires_grad, model.parameters()), 
                            lr=args.learning_rate, 
                            betas=(0.9, 0.99))
+
+    #model_opt = optim.SGD(filter(lambda p: p.requires_grad, model.parameters()),
+    #                      lr=args.learning_rate, 
+    #                      momentum=args.momentum, 
+    #                      weight_decay=args.weight_decay)
+
     model_opt.zero_grad()
 
     discriminator_opt = optim.Adam(filter(lambda p: p.requires_grad, discriminator.parameters()), 
@@ -166,6 +174,10 @@ def main():
     for param in model.decoder.parameters():
         param.requires_grad = False
 
+    """ Fix Classifier """
+    for param in model.classifier.parameters():
+        param.requires_grad = False
+
     for step in range(args.num_steps):
 
         cls_loss_value = 0
@@ -182,9 +194,9 @@ def main():
 
         for idx in range(args.iter_size):
 
-            """ Train Model and Fix Discriminator """
-            for param in discriminator.parameters():
-                param.requires_grad = False
+            #""" Train Model and Fix Discriminator """
+            #for param in discriminator.parameters():
+            #    param.requires_grad = False
 
             """ Train Source Data """
             try:
@@ -193,11 +205,13 @@ def main():
                 source_iter = enumerate(source_loader)
                 _, batch = source_iter.next()
 
-            image = Variable(batch['image']).cuda()
+            image = batch['image'].cuda()
             label = batch['label']
+            rec_image = batch['rec_image'].cuda()
 
             latent_source, extracted_source, cls_source, rec_source = model(image)
 
+            '''
             loss = 0
 
             if args.cls_loss:
@@ -211,22 +225,28 @@ def main():
                 contra_loss_value += contra_loss.data.cpu().numpy() / args.iter_size
 
             if args.rec_loss:
-                rec_loss = loss_rec(pred=rec_source, gt=image, use_cuda=use_cuda)
+                rec_loss = loss_rec(pred=rec_source, gt=rec_image, use_cuda=use_cuda)
                 loss += args.w_rec * rec_loss
                 rec_loss_value += rec_loss.data.cpu().numpy() / args.iter_size
 
             loss = loss / args.iter_size
             loss.backward()
-
             '''
-            """ Train Target Data """
-            _, batch = target_iter.next()
 
-            image = Variable(batch['image']).cuda()
+            """ Train Target Data """
+            try:
+                _, batch = target_iter.next()
+            except:
+                target_iter = enumerate(target_loader)
+                _, batch = target_iter.next()
+
+            image = batch['image'].cuda()
             label = batch['label']
+            rec_image = batch['rec_image'].cuda()
 
             latent_target, extracted_target, cls_target, rec_target = model(image)
 
+            '''
             D_output = discriminator(extracted_target)
 
             tensor = Variable(torch.FloatTensor(D_output.data.size()).fill_(source_label)).cuda()
@@ -236,11 +256,11 @@ def main():
 
                 loss = args.w_adv * adv_loss
                 loss.backward()
+            '''
 
-
-            """ Train Discriminator """
-            for param in discriminator.parameters():
-                param.requires_grad = True
+            #""" Train Discriminator """
+            #for param in discriminator.parameters():
+            #    param.requires_grad = True
 
             """ Train with Source Data """
             extracted_source = extracted_source.detach()
@@ -268,26 +288,29 @@ def main():
 
                 loss = args.w_dis * dis_loss
                 loss.backward()
-            '''
 
-        model_opt.step()
-        #discriminator_opt.step()
+        #model_opt.step()
+        discriminator_opt.step()
 
         print('[{0:6d}/{1:6d}] cls: {2:.3f} rec: {3:.3f} contra: {4:.3f} adv: {5:.3f} dis: {6:.3f}'.format(step+1, 
             args.num_steps, cls_loss_value, rec_loss_value, contra_loss_value, adv_target_loss_value, dis_loss_value))
 
         if step >= args.num_steps_stop - 1:
             print('Saving model...')
-            model_path = os.path.join(args.model_dir, 'Model_Duke_{}.pth.tar'.format(args.num_steps))
-            discriminator_path = os.path.join(args.model_dir, 'Discriminator_Duke_{}.pth.tar'.format(args.num_steps))
+            model_path = os.path.join(args.model_dir, 'Model_{}_{}.pth.tar'.format(args.source_dataset, args.num_steps))
+            classifier_path = os.path.join(args.model_dir, 'Classifier_{}_{}.pth.tar'.format(args.source_dataset, args.num_steps))
+            discriminator_path = os.path.join(args.model_dir, 'Discriminator_{}_{}.pth.tar'.format(args.source_dataset, args.num_steps))
             torch.save(model.state_dict(), model_path)
+            torch.save(model.classifier.state_dict(), classifier_path)
             torch.save(discriminator.state_dict(), discriminator_path)
 
         if (step+1) % args.save_steps == 0:
             print('Saving model...')
-            model_path = os.path.join(args.model_dir, 'Model_Duke_{}.pth.tar'.format(step+1))
-            discriminator_path = os.path.join(args.model_dir, 'Discriminator_Duke_{}.pth.tar'.format(step+1))
+            model_path = os.path.join(args.model_dir, 'Model_{}_{}.pth.tar'.format(args.source_dataset, step+1))
+            classifier_path = os.path.join(args.model_dir, 'Classifier_{}_{}.pth.tar'.format(args.source_dataset, step+1))
+            discriminator_path = os.path.join(args.model_dir, 'Discriminator_{}_{}.pth.tar'.format(args.source_dataset, step+1))
             torch.save(model.state_dict(), model_path)
+            torch.save(model.classifier.state_dict(), classifier_path)
             torch.save(discriminator.state_dict(), discriminator_path)
 
 if __name__ == '__main__':

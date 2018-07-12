@@ -1,5 +1,3 @@
-CLASS_NUM = 751
-
 IMAGE_HEIGHT = 224
 IMAGE_WIDTH = 224
 
@@ -8,5 +6,8 @@ STDDEV = [0.229, 0.224, 0.225]
 
 SKIP_CONNECTION = True
 
-MARKET_DIR = '/home/yujheli/Project/ReID/dataset/Market'
-DUKE_DIR = '/home/yujheli/Project/ReID/dataset/Duke'
+DUKE_CLASS_DIM = 702
+MARKET_CLASS_DIM = 751
+
+MARKET_DIR = '/home/vll/ReID/dataset/Market'
+DUKE_DIR = '/home/vll/ReID/dataset/Duke'
