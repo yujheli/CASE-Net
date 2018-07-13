@@ -178,8 +178,8 @@ def main():
         param.requires_grad = False
 
     """ Fix Decoder """
-    for param in model.decoder.parameters():
-        param.requires_grad = False
+    #for param in model.decoder.parameters():
+    #    param.requires_grad = False
 
     """ Fix Classifier """
     for param in model.classifier.parameters():
@@ -201,9 +201,9 @@ def main():
 
         for idx in range(args.iter_size):
 
-            #""" Train Model and Fix Discriminator """
-            #for param in discriminator.parameters():
-            #    param.requires_grad = False
+            """ Train Model and Fix Discriminator """
+            for param in discriminator.parameters():
+                param.requires_grad = False
 
             """ Train Source Data """
             try:
@@ -218,7 +218,6 @@ def main():
 
             latent_source, extracted_source, cls_source, rec_source = model(image)
 
-            '''
             loss = 0
 
             if args.cls_loss:
@@ -238,8 +237,8 @@ def main():
 
             loss = loss / args.iter_size
             loss.backward()
-            '''
 
+            '''
             """ Train Target Data """
             try:
                 _, batch = target_iter.next()
@@ -253,7 +252,6 @@ def main():
 
             latent_target, extracted_target, cls_target, rec_target = model(image)
 
-            '''
             D_output = discriminator(extracted_target)
 
             tensor = Variable(torch.FloatTensor(D_output.data.size()).fill_(source_label)).cuda()
@@ -263,7 +261,6 @@ def main():
 
                 loss = args.w_adv * adv_loss
                 loss.backward()
-            '''
 
             #""" Train Discriminator """
             #for param in discriminator.parameters():
@@ -295,9 +292,10 @@ def main():
 
                 loss = args.w_dis * dis_loss
                 loss.backward()
+            '''
 
-        #model_opt.step()
-        discriminator_opt.step()
+        model_opt.step()
+        #discriminator_opt.step()
 
         print('[{0:6d}/{1:6d}] cls: {2:.3f} rec: {3:.3f} contra: {4:.3f} adv: {5:.3f} dis: {6:.3f}'.format(step+1, 
             args.num_steps, cls_loss_value, rec_loss_value, contra_loss_value, adv_target_loss_value, dis_loss_value))

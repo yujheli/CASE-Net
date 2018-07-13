@@ -1,0 +1,8 @@
+# ignore all .pyc files
+*.pyc
+
+# ignore all .pth.tar files
+*.pth.tar
+
+# ignore config.py
+config.py
