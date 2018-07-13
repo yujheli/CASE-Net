@@ -36,7 +36,7 @@ class Extractor(nn.Module):
 class Classifier(nn.Module):
     def __init__(self,
                  input_dim=2048,
-                 output_dim=config.CLASS_NUM):
+                 output_dim=config.DUKE_CLASS_NUM):
         super(Classifier, self).__init__()
         self.linear = nn.Linear(input_dim, output_dim)
         self.softmax = nn.Softmax(dim=1)
@@ -141,7 +141,7 @@ class AdaptReID(nn.Module):
                  backbone='resnet-101',
                  skip_connection=config.SKIP_CONNECTION,
                  classifier_input_dim=2048,
-                 classifier_output_dim=1812,
+                 classifier_output_dim=config.DUKE_CLASS_NUM,
                  use_cuda=True):
         super(AdaptReID, self).__init__()
 

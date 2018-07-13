@@ -67,6 +67,21 @@ def adjust_discriminator_lr(optimizer, idx):
         optimizer.param_groups[1]['lr'] = lr * 10
 
 
+def save_model(model, discriminator, step):
+    model_path = os.path.join(args.model_dir, 'Model_{}_{}.pth.tar'.format(args.source_dataset, step))
+    extractor_path = os.path.join(args.model_dir, 'Extractor_{}_{}.pth.tar'.format(args.source_dataset, step))
+    decoder_path = os.path.join(args.model_dir, 'Decoder_{}_{}.pth.tar'.format(args.source_dataset, step))
+    classifier_path = os.path.join(args.model_dir, 'Classifier_{}_{}.pth.tar'.format(args.source_dataset, step))
+    discriminator_path = os.path.join(args.model_dir, 'Discriminator_{}_{}.pth.tar'.format(args.source_dataset, step))
+            
+    torch.save(model.state_dict(), model_path)
+    torch.save(model.extractor.state_dict(), extractor_path)
+    torch.save(model.decoder.state_dict(), decoder_path)
+    torch.save(model.classifier.state_dict(), classifier_path)
+    torch.save(discriminator.state_dict(), discriminator_path)
+    return
+
+
 def main():
 
     """ GPU Settings """
@@ -76,11 +91,11 @@ def main():
 
     """ Initialize Model """
     if args.source_dataset == 'Duke':
-        classifier_output_dim = config.DUKE_CLASS_DIM
+        classifier_output_dim = config.DUKE_CLASS_NUM
     elif args.source_dataset == 'Market':
-        classifier_output_dim = config.MARKET_CLASS_DIM
+        classifier_output_dim = config.MARKET_CLASS_NUM
     elif args.source_dataset == 'MSMT':
-        classifier_output_dim = config.MSMT_CLASS_DIM
+        classifier_output_dim = config.MSMT_CLASS_NUM
     
     model = AdaptReID(use_cuda=use_cuda,
                       classifier_output_dim=classifier_output_dim)
@@ -88,11 +103,29 @@ def main():
         print("loading pretrained model...")
         checkpoint = torch.load(args.model_path, map_location=lambda storage, loc: storage)
         for name, param in model.extractor.state_dict().items():
-            model.extractor.state_dict()[name].copy_(checkpoint['state_dict']['extractor.' + name])    
+            model.extractor.state_dict()[name].copy_(checkpoint['extractor.' + name])    
         for name, param in model.classifier.state_dict().items():
-            model.classifier.state_dict()[name].copy_(checkpoint['state_dict']['classifier.' + name])
+            model.classifier.state_dict()[name].copy_(checkpoint['classifier.' + name])
         for name, param in model.decoder.state_dict().items():
-            model.decoder.state_dict()[name].copy_(checkpoint['state_dict']['decoder.' + name])
+            model.decoder.state_dict()[name].copy_(checkpoint['decoder.' + name])
+
+    if args.extractor_path:
+        print("loading pretrained extractor...")
+        checkpoint = torch.load(args.extractor_path, map_location=lambda storage, loc: storage)
+        for name, param in model.extractor.state_dict().items():
+            model.extractor.state_dict()[name].copy_(checkpoint['extractor.' + name])    
+
+    if args.decoder_path:
+        print("loading pretrained decoder...")
+        checkpoint = torch.load(args.decoder_path, map_location=lambda storage, loc: storage)
+        for name, param in model.decoder.state_dict().items():
+            model.decoder.state_dict()[name].copy_(checkpoint['decoder.' + name])    
+
+    if args.classifier_path:
+        print("loading pretrained classifier...")
+        checkpoint = torch.load(args.classifier_path, map_location=lambda storage, loc: storage)
+        for name, param in model.classifier.state_dict().items():
+            model.classifier.state_dict()[name].copy_(checkpoint['classifier.' + name])    
 
 
     """ Initialize Discriminator """
@@ -102,7 +135,7 @@ def main():
         print("loading pretrained discriminator...")
         checkpoint = torch.load(args.discriminator_path, map_location=lambda storage, loc: storage)
         for name, param in discriminator.state_dict().items():
-            discriminator.state_dict()[name].copy_(checkpoint['state_dict']['discriminator.' + name])
+            discriminator.state_dict()[name].copy_(checkpoint['discriminator.' + name])
 
     model.train()
     discriminator.train()
@@ -178,8 +211,8 @@ def main():
         param.requires_grad = False
 
     """ Fix Decoder """
-    #for param in model.decoder.parameters():
-    #    param.requires_grad = False
+    for param in model.decoder.parameters():
+        param.requires_grad = False
 
     """ Fix Classifier """
     for param in model.classifier.parameters():
@@ -238,7 +271,6 @@ def main():
             loss = loss / args.iter_size
             loss.backward()
 
-            '''
             """ Train Target Data """
             try:
                 _, batch = target_iter.next()
@@ -262,9 +294,9 @@ def main():
                 loss = args.w_adv * adv_loss
                 loss.backward()
 
-            #""" Train Discriminator """
-            #for param in discriminator.parameters():
-            #    param.requires_grad = True
+            """ Train Discriminator """
+            for param in discriminator.parameters():
+                param.requires_grad = True
 
             """ Train with Source Data """
             extracted_source = extracted_source.detach()
@@ -292,31 +324,20 @@ def main():
 
                 loss = args.w_dis * dis_loss
                 loss.backward()
-            '''
 
         model_opt.step()
-        #discriminator_opt.step()
+        discriminator_opt.step()
 
         print('[{0:6d}/{1:6d}] cls: {2:.3f} rec: {3:.3f} contra: {4:.3f} adv: {5:.3f} dis: {6:.3f}'.format(step+1, 
             args.num_steps, cls_loss_value, rec_loss_value, contra_loss_value, adv_target_loss_value, dis_loss_value))
 
         if step >= args.num_steps_stop - 1:
             print('Saving model...')
-            model_path = os.path.join(args.model_dir, 'Model_{}_{}.pth.tar'.format(args.source_dataset, args.num_steps))
-            classifier_path = os.path.join(args.model_dir, 'Classifier_{}_{}.pth.tar'.format(args.source_dataset, args.num_steps))
-            discriminator_path = os.path.join(args.model_dir, 'Discriminator_{}_{}.pth.tar'.format(args.source_dataset, args.num_steps))
-            torch.save(model.state_dict(), model_path)
-            torch.save(model.classifier.state_dict(), classifier_path)
-            torch.save(discriminator.state_dict(), discriminator_path)
+            save_model(model, discriminator, args.num_steps)
 
         if (step+1) % args.save_steps == 0:
             print('Saving model...')
-            model_path = os.path.join(args.model_dir, 'Model_{}_{}.pth.tar'.format(args.source_dataset, step+1))
-            classifier_path = os.path.join(args.model_dir, 'Classifier_{}_{}.pth.tar'.format(args.source_dataset, step+1))
-            discriminator_path = os.path.join(args.model_dir, 'Discriminator_{}_{}.pth.tar'.format(args.source_dataset, step+1))
-            torch.save(model.state_dict(), model_path)
-            torch.save(model.classifier.state_dict(), classifier_path)
-            torch.save(discriminator.state_dict(), discriminator_path)
+            save_model(model, discriminator, step+1)
 
 if __name__ == '__main__':
     main()

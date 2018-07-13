@@ -12,8 +12,11 @@ class ArgumentParser():
         
     def add_base_parameters(self):
         base_params = self.parser.add_argument_group('base')
-        base_params.add_argument('--model-path', type=str, default='', help='Pre-trained model path')
         base_params.add_argument('--model-dir', type=str, default='', help='Directory for saving trained models')
+        base_params.add_argument('--model-path', type=str, default='', help='Pre-trained model path')
+        base_params.add_argument('--extractor-path', type=str, default='', help='Pre-trained extractor path')
+        base_params.add_argument('--decoder-path', type=str, default='', help='Pre-trained decoder path')
+        base_params.add_argument('--classifier-path', type=str, default='', help='Pre-trained classifier path')
         base_params.add_argument('--discriminator-path', type=str, default='', help='Pre-trained discriminator path')
         base_params.add_argument('--gpu', type=int, default=0, help='Which GPU to use?')
         base_params.add_argument('--num-workers', type=int, default=4, help='Number of workers')
