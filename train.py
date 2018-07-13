@@ -245,9 +245,9 @@ def main():
                 source_iter = enumerate(source_loader)
                 _, batch = source_iter.next()
 
-            image = batch['image'].cuda()
+            image = batch['image'].cuda(args.gpu)
             label = batch['label']
-            rec_image = batch['rec_image'].cuda()
+            rec_image = batch['rec_image'].cuda(args.gpu)
 
             latent_source, extracted_source, cls_source, rec_source = model(image)
 
@@ -278,15 +278,15 @@ def main():
                 target_iter = enumerate(target_loader)
                 _, batch = target_iter.next()
 
-            image = batch['image'].cuda()
+            image = batch['image'].cuda(args.gpu)
             label = batch['label']
-            rec_image = batch['rec_image'].cuda()
+            rec_image = batch['rec_image'].cuda(args.gpu)
 
             latent_target, extracted_target, cls_target, rec_target = model(image)
 
             D_output = discriminator(extracted_target)
 
-            tensor = Variable(torch.FloatTensor(D_output.data.size()).fill_(source_label)).cuda()
+            tensor = Variable(torch.FloatTensor(D_output.data.size()).fill_(source_label)).cuda(args.gpu)
             if args.adv_loss:
                 adv_loss = loss_adv(pred=D_output, gt=tensor)
                 adv_target_loss_value += adv_loss.data.cpu().numpy() / args.iter_size
@@ -303,7 +303,7 @@ def main():
             
             D_output = discriminator(extracted_source)
 
-            tensor = Variable(torch.FloatTensor(D_output.data.size()).fill_(source_label)).cuda()
+            tensor = Variable(torch.FloatTensor(D_output.data.size()).fill_(source_label)).cuda(args.gpu)
             if args.dis_loss:
                 dis_loss = loss_adv(pred=D_output, gt=tensor) / args.iter_size / 2
                 dis_loss_value += dis_loss.data.cpu().numpy()
@@ -317,7 +317,7 @@ def main():
  
             D_output = discriminator(extracted_target)
 
-            tensor = Variable(torch.FloatTensor(D_output.data.size()).fill_(target_label)).cuda()
+            tensor = Variable(torch.FloatTensor(D_output.data.size()).fill_(target_label)).cuda(args.gpu)
             if args.dis_loss:
                 dis_loss = loss_adv(pred=D_output, gt=tensor) / args.iter_size / 2
                 dis_loss_value += dis_loss.data.cpu().numpy()

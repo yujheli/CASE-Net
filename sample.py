@@ -1,0 +1,19 @@
+import os
+
+IMAGE_HEIGHT = 224
+IMAGE_WIDTH = 224
+
+MEAN = [0.485, 0.456, 0.406]
+STDDEV = [0.229, 0.224, 0.225]
+
+SKIP_CONNECTION = True
+
+DUKE_CLASS_NUM = 702
+MARKET_CLASS_NUM = 751
+MSMT_CLASS_NUM = 1041
+
+DATASET_DIR = '/home/yujheli/Project/ReID/dataset'
+
+MARKET_DIR = os.path.join(DATASET_DIR, 'Market')
+DUKE_DIR = os.path.join(DATASET_DIR, 'Duke')
+MSMT_DIR = os.path.join(DATASET_DIR, 'MSMT17_V1')
