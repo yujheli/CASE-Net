@@ -9,3 +9,6 @@ config.py
 
 # pretrain
 pretrain
+
+# trained model directory
+trained_models
