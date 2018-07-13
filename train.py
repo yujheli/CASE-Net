@@ -16,6 +16,7 @@ from loss.loss import ContrastiveLoss
 from loss.loss import ReconstructionLoss
 from data.duke import Duke
 from data.market import Market
+from data.msmt import MSMT
 from parser.parser import ArgumentParser
 import config
 
@@ -78,6 +79,8 @@ def main():
         classifier_output_dim = config.DUKE_CLASS_DIM
     elif args.source_dataset == 'Market':
         classifier_output_dim = config.MARKET_CLASS_DIM
+    elif args.source_dataset == 'MSMT':
+        classifier_output_dim = config.MSMT_CLASS_DIM
     
     model = AdaptReID(use_cuda=use_cuda,
                       classifier_output_dim=classifier_output_dim)
@@ -113,11 +116,15 @@ def main():
         SourceData = Duke
     elif args.source_dataset == 'Market':
         SourceData = Market
+    elif args.source_dataset == 'MSMT':
+        SourceData = MSMT
 
     if args.target_dataset == 'Duke':
         TargetData = Duke
     elif args.target_dataset == 'Market':
         TargetData = Market
+    elif args.target_dataset == 'MSMT':
+        TargetData = MSMT
 
     source_data = SourceData(mode='train',
                              downsample_scale=None,
