@@ -6,3 +6,6 @@
 
 # ignore config.py
 config.py
+
+# pretrain
+pretrain
