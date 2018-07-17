@@ -14,14 +14,14 @@ from transform.transform import GeometricTnf
 class CUHK(Dataset):
     """
         mode:
-            source: 1367 (train) different identities.
+            source: 1367 (train) + 100(test) different identities.
             train:  1367 different identities.
             test:   100 different identities.
         
         label:
-            source:   0 ~ 1366
+            source:   0 ~ 1466
             train:    0 ~ 1366
-            test:   100 out of 1366
+            test:     0 ~ 99
     """
     
     def __init__(self, 
