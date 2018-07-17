@@ -5,3 +5,5 @@ This repository contains codes for AAAI-18 unsupervised domain adaptation for pe
 ``` 
 python setup.py --dataset-dir path/to/dataset
 ```
+
+It will automatically generate a ```config.py``` under the current directory.
