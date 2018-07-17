@@ -29,7 +29,6 @@ class Market(Dataset):
                  dataset_path=config.MARKET_DATA_DIR,
                  csv_path=config.MARKET_CSV_DIR,
                  image_size=(config.IMAGE_HEIGHT, config.IMAGE_WIDTH),
-                 downsample_scale=None,
                  transform=None,
                  random_crop=False): 
 
@@ -38,16 +37,17 @@ class Market(Dataset):
         self.csv_path = csv_path 
         self.mode = mode
         self.csv = self.get_csv(mode)
-        self.image_names = self.csv.iloc[:,0]
-        self.image_labels = self.csv.iloc[:,1]
+        self.image_names = self.csv['image_path']
+        self.image_labels = self.csv['id']
+        if self.mode == 'source' or self.mode == 'train':
+            self.downsample_scale = self.csv['downsample'].as_matrix().astype('int')
         if self.mode == 'test' or self.mode == 'query':
-            self.camera_id = self.csv.iloc[:,2].as_matrix().astype('int')
+            self.camera_id = self.csv['camera'].as_matrix().astype('int')
         self.random_crop = random_crop
-        self.downsample_scale = downsample_scale
         self.transform = transform
         self.affineTnf = GeometricTnf(out_h=self.image_height, # Use for image resizing
                                       out_w=self.image_width, 
-                                      use_cuda=False) 
+                                      use_cuda=False)  
  
     def __len__(self):
         return len(self.csv)
@@ -56,13 +56,19 @@ class Market(Dataset):
         input_image, rec_image = self.get_image(self.image_names, idx)
         label = self.get_label(self.image_labels, idx)
 
-        database = {'image': input_image, 
-                    'label': label,
-                    'rec_image': rec_image}
+        database = {'image': input_image} 
 
-        if self.mode == 'test' or self.mode == 'query':
+        if self.mode == 'source':
+            database['label'] = label
+            database['rec_image'] = rec_image
+
+        elif self.mode == 'train':
+            database['rec_image'] = rec_image
+ 
+        elif self.mode == 'test' or self.mode == 'query':
             camera_id = self.camera_id[idx]
             database['camera_id'] = camera_id
+            database['label'] = label
 
         if self.transform:
             database = self.transform(database)
@@ -71,13 +77,13 @@ class Market(Dataset):
 
     def get_csv(self, mode):
         if mode == 'source':
-            csv_path = os.path.join(self.dataset_path, config.SOURCE_DATA_CSV)
+            csv_path = os.path.join(self.csv_path, config.SOURCE_DATA_CSV)
         elif mode == 'train':
-            csv_path = os.path.join(self.dataset_path, config.TRAIN_DATA_CSV)
+            csv_path = os.path.join(self.csv_path, config.TRAIN_DATA_CSV)
         elif mode == 'test':
-            csv_path = os.path.join(self.dataset_path, config.TEST_DATA_CSV)
+            csv_path = os.path.join(self.csv_path, config.TEST_DATA_CSV)
         else: # query
-            csv_path = os.path.join(self.dataset_path, config.QUERY_DATA_CSV)
+            csv_path = os.path.join(self.csv_path, config.QUERY_DATA_CSV)
 
         return pd.read_csv(csv_path)
 
@@ -102,15 +108,21 @@ class Market(Dataset):
         image = torch.Tensor(image.astype(np.float32))
 
         """ Down Sampling """
-        if self.downsample_scale:
-            downsampled_image = self.downsample(image, self.downsample_scale)
-            downsampled_image_var = Variable(downsampled_image, requires_grad=False)
-            downsampled_image = self.affineTnf(downsampled_image_var).data.squeeze(0)
-        
-            image_var = Variable(image, requires_grad=False)
-            image = self.affineTnf(image_var).data.squeeze(0)
+        if self.mode == 'train' or self.mode == 'source':
+            if self.downsample_scale[idx] > 1:
+                downsampled_image = self.downsample(image, self.downsample_scale[idx])
+                downsampled_image_var = Variable(downsampled_image, requires_grad=False)
+                downsampled_image = self.affineTnf(downsampled_image_var).data.squeeze(0)
 
-            return downsampled_image, image
+                image_var = Variable(image, requires_grad=False)
+                image = self.affineTnf(image_var).data.squeeze(0)
+        
+                return downsampled_image, image
+
+            else:
+                image_var = Variable(image, requires_grad=False)
+                image = self.affineTnf(image_var).data.squeeze(0)
+                return image, image
 
         else:
             image_var = Variable(image, requires_grad=False)
@@ -125,4 +137,6 @@ class Market(Dataset):
     def get_label(self, label_list, idx):
         label = label_list[idx]
         label = Variable(torch.from_numpy(np.array(label, dtype='int32')).long())
+        #label = int(label_list[idx])
+        #label = Variable(torch.LongTensor([label]))
         return label

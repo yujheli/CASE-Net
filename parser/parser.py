@@ -9,6 +9,9 @@ class ArgumentParser():
         if mode == 'train':
             self.add_train_parameters()
             self.add_dataset_parameters()
+
+        elif mode == 'eval':
+            self.add_eval_parameters()
         
     def add_base_parameters(self):
         base_params = self.parser.add_argument_group('base')
@@ -18,8 +21,10 @@ class ArgumentParser():
         base_params.add_argument('--decoder-path', type=str, default='', help='Pre-trained decoder path')
         base_params.add_argument('--classifier-path', type=str, default='', help='Pre-trained classifier path')
         base_params.add_argument('--discriminator-path', type=str, default='', help='Pre-trained discriminator path')
+        base_params.add_argument('--backbone', type=str, default='resnet-101', help='Backbone for feature extractor')                
         base_params.add_argument('--gpu', type=int, default=0, help='Which GPU to use?')
         base_params.add_argument('--num-workers', type=int, default=4, help='Number of workers')
+        base_params.add_argument('--batch-size', type=int, default=8, help='Batch size')
     
     def add_dataset_parameters(self):
         dataset_params = self.parser.add_argument_group('dataset')
@@ -36,7 +41,6 @@ class ArgumentParser():
         train_params.add_argument('--save-steps', type=int, default=10, help='number of saving steps')
         train_params.add_argument('--num-steps-stop', type=int, default=10, help='early stopping steps')
         train_params.add_argument('--iter-size', type=int, default=1)
-        train_params.add_argument('--batch-size', type=int, default=8, help='training batch size')
         train_params.add_argument('--weight-decay', type=float, default=0, help='weight decay constant')
         train_params.add_argument('--seed', type=int, default=1234, help='Random seed')
         train_params.add_argument('--rec-loss', type=str_to_bool, nargs='?', const=True, default=False, help='Use reconstruction loss?')        
@@ -49,7 +53,17 @@ class ArgumentParser():
         train_params.add_argument('--w-adv', type=float, default=0, help='weight for adversarial loss')
         train_params.add_argument('--w-dis', type=float, default=0, help='weight for discriminator loss')
         train_params.add_argument('--w-contra', type=float, default=0, help='weight for contrastive loss')
+        train_params.add_argument('--eval-metric', type=str, default='rank', help='Eval metric rank/mAP')                
+        train_params.add_argument('--dist-metric', type=str, default='L2', help='Retrieval distance metric') 
+        train_params.add_argument('--rank', type=int, default=1, help='Rank')                
         
+    def add_eval_parameters(self):
+        eval_params = self.parser.add_argument_group('eval')
+        eval_params.add_argument('--dataset', type=str, default='Duke', help='Eval dataset')                
+        eval_params.add_argument('--eval-metric', type=str, default='rank', help='Eval metric rank/mAP')                
+        eval_params.add_argument('--dist-metric', type=str, default='L2', help='Retrieval distance metric') 
+        eval_params.add_argument('--rank', type=int, default=1, help='Rank')                
+
     def parse(self, arg_str=None):
         if arg_str is None:
             args = self.parser.parse_args()

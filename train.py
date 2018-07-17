@@ -19,6 +19,8 @@ from data.market import Market
 from data.msmt import MSMT
 from data.cuhk import CUHK
 from parser.parser import ArgumentParser
+from util.eval_util import eval_metric
+# from tensorboardX import SummaryWriter 
 import config
 
 
@@ -103,10 +105,14 @@ def main():
     elif args.source_dataset == 'CUHK':
         classifier_output_dim = config.CUHK_CLASS_NUM
     
-    model = AdaptReID(use_cuda=use_cuda,
+    #model = AdaptReID(backbone=args.backbone,
+    model = AdaptReID(backbone='resnet-50',
+                      use_cuda=use_cuda,
+                      #skip_connection=False,
                       classifier_output_dim=classifier_output_dim)
+
     if args.model_path:
-        print("loading pretrained model...")
+        print("Loading pre-trained model...")
         checkpoint = torch.load(args.model_path, map_location=lambda storage, loc: storage)
         for name, param in model.extractor.state_dict().items():
             model.extractor.state_dict()[name].copy_(checkpoint['extractor.' + name])    
@@ -116,19 +122,19 @@ def main():
             model.decoder.state_dict()[name].copy_(checkpoint['decoder.' + name])
 
     if args.extractor_path:
-        print("loading pretrained extractor...")
+        print("Loading pre-trained extractor...")
         checkpoint = torch.load(args.extractor_path, map_location=lambda storage, loc: storage)
         for name, param in model.extractor.state_dict().items():
             model.extractor.state_dict()[name].copy_(checkpoint['extractor.' + name])    
 
     if args.decoder_path:
-        print("loading pretrained decoder...")
+        print("Loading pre-trained decoder...")
         checkpoint = torch.load(args.decoder_path, map_location=lambda storage, loc: storage)
         for name, param in model.decoder.state_dict().items():
             model.decoder.state_dict()[name].copy_(checkpoint['decoder.' + name])    
 
     if args.classifier_path:
-        print("loading pretrained classifier...")
+        print("Loading pre-trained classifier...")
         checkpoint = torch.load(args.classifier_path, map_location=lambda storage, loc: storage)
         for name, param in model.classifier.state_dict().items():
             model.classifier.state_dict()[name].copy_(checkpoint['classifier.' + name])    
@@ -143,8 +149,6 @@ def main():
         for name, param in discriminator.state_dict().items():
             discriminator.state_dict()[name].copy_(checkpoint['discriminator.' + name])
 
-    model.train()
-    discriminator.train()
 
     if not os.path.exists(args.model_dir):
         os.makedirs(args.model_dir)
@@ -160,18 +164,24 @@ def main():
     elif args.source_dataset == 'CUHK':
         SourceData = CUHK
         
-
     if args.target_dataset == 'Duke':
         TargetData = Duke
+        TestData = Duke
+        QueryData = Duke
     elif args.target_dataset == 'Market':
         TargetData = Market
+        TestData = Market
+        QueryData = Market
     elif args.target_dataset == 'MSMT':
         TargetData = MSMT
+        TestData = MSMT
+        QueryData = MSMT
     elif args.target_dataset == 'CUHK':
         TargetData = CUHK
+        TestData = CUHK
+        QueryData = CUHK
 
-    source_data = SourceData(mode='train',
-                             downsample_scale=None,
+    source_data = SourceData(mode='source',
                              transform=NormalizeImage(['image', 'rec_image']),
                              random_crop=args.random_crop)
 
@@ -184,7 +194,6 @@ def main():
     source_iter = enumerate(source_loader)
 
     target_data = TargetData(mode='train',
-                             downsample_scale=None,
                              transform=NormalizeImage(['image', 'rec_image']),
                              random_crop=args.random_crop)
 
@@ -195,17 +204,36 @@ def main():
                                pin_memory=True)
 
     target_iter = enumerate(target_loader)
+    
+
+    test_data = TestData(mode='test',
+                         transform=NormalizeImage(['image']))
+
+    test_loader = DataLoader(test_data,
+                             batch_size=int(args.batch_size/2),
+                             num_workers=args.num_workers,
+                             pin_memory=True)
+
+    query_data = QueryData(mode='query',
+                           transform=NormalizeImage(['image']))
+
+    query_loader = DataLoader(query_data,
+                              batch_size=int(args.batch_size/2),
+                              num_workers=args.num_workers,
+                              pin_memory=True)
 
 
     """ Initialize Optimizer """
+    '''
     model_opt = optim.Adam(filter(lambda p: p.requires_grad, model.parameters()), 
                            lr=args.learning_rate, 
                            betas=(0.9, 0.99))
-
-    #model_opt = optim.SGD(filter(lambda p: p.requires_grad, model.parameters()),
-    #                      lr=args.learning_rate, 
-    #                      momentum=args.momentum, 
-    #                      weight_decay=args.weight_decay)
+    '''
+    
+    model_opt = optim.SGD(filter(lambda p: p.requires_grad, model.parameters()),
+                          lr=args.learning_rate, 
+                          momentum=args.momentum,
+                          weight_decay=args.weight_decay)
 
     model_opt.zero_grad()
 
@@ -217,19 +245,12 @@ def main():
     source_label = 0
     target_label = 1
 
-    """ Fix Extractor """
-    for param in model.extractor.parameters():
-        param.requires_grad = False
 
-    """ Fix Decoder """
-    for param in model.decoder.parameters():
-        param.requires_grad = False
-
-    """ Fix Classifier """
-    for param in model.classifier.parameters():
-        param.requires_grad = False
-
+    """ Starts Training """
     for step in range(args.num_steps):
+    
+        model.train()
+        discriminator.train()
 
         cls_loss_value = 0
         rec_loss_value = 0
@@ -238,10 +259,10 @@ def main():
         dis_loss_value = 0 # Discriminator's loss
 
         model_opt.zero_grad()
-        adjust_model_lr(model_opt, step)
+        #adjust_model_lr(model_opt, step)
 
         discriminator_opt.zero_grad()
-        adjust_discriminator_lr(discriminator_opt, step)
+        #adjust_discriminator_lr(discriminator_opt, step)
 
         for idx in range(args.iter_size):
 
@@ -277,10 +298,11 @@ def main():
             if args.rec_loss:
                 rec_loss = loss_rec(pred=rec_source, gt=rec_image, use_cuda=use_cuda)
                 loss += args.w_rec * rec_loss
-                rec_loss_value += rec_loss.data.cpu().numpy() / args.iter_size
+                rec_loss_value += rec_loss.data.cpu().numpy() / args.iter_size / 2
 
             loss = loss / args.iter_size
             loss.backward()
+        
 
             """ Train Target Data """
             try:
@@ -290,7 +312,6 @@ def main():
                 _, batch = target_iter.next()
 
             image = batch['image'].cuda(args.gpu)
-            label = batch['label']
             rec_image = batch['rec_image'].cuda(args.gpu)
 
             latent_target, extracted_target, cls_target, rec_target = model(image)
@@ -298,12 +319,23 @@ def main():
             D_output = discriminator(extracted_target)
 
             tensor = Variable(torch.FloatTensor(D_output.data.size()).fill_(source_label)).cuda(args.gpu)
+
+            loss = 0
+
+            if args.rec_loss:
+                rec_loss = loss_rec(pred=rec_target, gt=rec_image, use_cuda=use_cuda)
+                loss += args.w_rec * rec_loss
+                rec_loss_value += rec_loss.data.cpu().numpy() / args.iter_size / 2
+
             if args.adv_loss:
                 adv_loss = loss_adv(pred=D_output, gt=tensor)
                 adv_target_loss_value += adv_loss.data.cpu().numpy() / args.iter_size
 
-                loss = args.w_adv * adv_loss
-                loss.backward()
+                loss += args.w_adv * adv_loss
+
+            loss = loss / args.iter_size
+            loss.backward()
+
 
             """ Train Discriminator """
             for param in discriminator.parameters():
@@ -339,7 +371,12 @@ def main():
         model_opt.step()
         discriminator_opt.step()
 
-        print('[{0:6d}/{1:6d}] cls: {2:.3f} rec: {3:.3f} contra: {4:.3f} adv: {5:.3f} dis: {6:.3f}'.format(step+1, 
+        if (step+1) % 1000 == 0:
+            print('Start evaluation...')
+            model.eval()
+            eval_metric(args, model, test_loader, query_loader)
+
+        print('[{0:6d}/{1:6d}] cls: {2:.6f} rec: {3:.3f} contra: {4:.3f} adv: {5:.3f} dis: {6:.3f}'.format(step+1, 
             args.num_steps, cls_loss_value, rec_loss_value, contra_loss_value, adv_target_loss_value, dis_loss_value))
 
         if step >= args.num_steps_stop - 1:

@@ -25,7 +25,9 @@ class ClassificationLoss(nn.Module):
         batch = gt.size()[0]
 
         if self.use_cuda:
-            loss = F.cross_entropy(predict, gt.cuda(), weight=weight)
+            #loss = F.cross_entropy(predict, gt.cuda(), weight=weight)
+            criterion = nn.CrossEntropyLoss().cuda()
+            loss = criterion(predict, gt.cuda())
         else:
             loss = F.cross_entropy(predict, gt, weight=weight)
 
@@ -33,7 +35,7 @@ class ClassificationLoss(nn.Module):
 
 class ContrastiveLoss(nn.Module):
     def __init__(self,
-                 margin=0):
+                 margin=2):
         super(ContrastiveLoss, self).__init__()
 
         self.margin = margin
@@ -55,7 +57,7 @@ class ContrastiveLoss(nn.Module):
                 else:
                     label = 0
                 dist = torch.dist(predict[i], predict[j], p=2) ** 2 / dim
-                loss += label * dist + (1 - label) * (self.margin - dist)
+                loss += label * dist + (1 - label) * F.relu(self.margin - dist)
         loss = 2 * loss / (batch * (batch - 1))
 
         return loss

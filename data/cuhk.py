@@ -29,23 +29,25 @@ class CUHK(Dataset):
                  dataset_path=config.CUHK_DATA_DIR,
                  csv_path=config.CUHK_CSV_DIR,
                  image_size=(config.IMAGE_HEIGHT, config.IMAGE_WIDTH),
-                 downsample_scale=None,
                  transform=None,
                  random_crop=False): 
 
         self.image_height, self.image_width = image_size
         self.dataset_path = dataset_path 
         self.csv_path = csv_path
+        self.mode = mode
         self.csv = self.get_csv(mode)
-        self.image_names = self.csv.iloc[:,0]
-        self.image_labels = self.csv.iloc[:,1]
-        self.camera_id = self.csv.iloc[:,2].as_matrix().astype('int')
+        self.image_names = self.csv['image_path']
+        self.image_labels = self.csv['id']
+        if self.mode == 'source' or self.mode == 'train':
+            self.downsample_scale = self.csv['downsample'].as_matrix().astype('int')
+        if self.mode == 'test' or self.mode == 'query':
+            self.camera_id = self.csv['camera'].as_matrix().astype('int')
         self.random_crop = random_crop
-        self.downsample_scale = downsample_scale
         self.transform = transform
-        self.affineTnf = GeometricTnf(out_h=self.image_height, # Use for image resizing 
+        self.affineTnf = GeometricTnf(out_h=self.image_height, # Use for image resizing
                                       out_w=self.image_width, 
-                                      use_cuda=False) 
+                                      use_cuda=False)  
  
     def __len__(self):
         return len(self.csv)
@@ -53,12 +55,21 @@ class CUHK(Dataset):
     def __getitem__(self, idx):
         input_image, rec_image = self.get_image(self.image_names, idx)
         label = self.get_label(self.image_labels, idx)
-        camera_id = self.camera_id[idx]
 
-        database = {'image': input_image, 
-                    'label': label,
-                    'camera_id': camera_id,
-                    'rec_image': rec_image}
+        database = {'image': input_image} 
+        
+        if self.mode == 'source':
+            database['label'] = label
+            database['rec_image'] = rec_image
+
+        elif self.mode == 'train':
+            database['rec_image'] = rec_image
+
+        elif self.mode == 'test' or self.mode == 'query':
+            camera_id = self.camera_id[idx]
+            database['camera_id'] = camera_id
+            database['label'] = label
+
 
         if self.transform:
             database = self.transform(database)
@@ -98,15 +109,21 @@ class CUHK(Dataset):
         image = torch.Tensor(image.astype(np.float32))
 
         """ Down Sampling """
-        if self.downsample_scale:
-            downsampled_image = self.downsample(image, self.downsample_scale)
-            downsampled_image_var = Variable(downsampled_image, requires_grad=False)
-            downsampled_image = self.affineTnf(downsampled_image_var).data.squeeze(0)
+        if self.mode == 'train' or self.mode == 'source':
+            if self.downsample_scale[idx] > 1:
+                downsampled_image = self.downsample(image, self.downsample_scale[idx])
+                downsampled_image_var = Variable(downsampled_image, requires_grad=False)
+                downsampled_image = self.affineTnf(downsampled_image_var).data.squeeze(0)
 
-            image_var = Variable(image, requires_grad=False)
-            image = self.affineTnf(image_var).data.squeeze(0)
-        
-            return downsampled_image, image
+                image_var = Variable(image, requires_grad=False)
+                image = self.affineTnf(image_var).data.squeeze(0)
+
+                return downsampled_image, image
+
+            else:
+                image_var = Variable(image, requires_grad=False)
+                image = self.affineTnf(image_var).data.squeeze(0)
+                return image, image
 
         else:
             image_var = Variable(image, requires_grad=False)

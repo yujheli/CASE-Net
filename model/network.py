@@ -3,6 +3,7 @@ import torch
 import torch.nn as nn
 from torch.autograd import Variable
 import torchvision.models as models
+import torch.nn.functional as F
 import numpy as np
 import config
 
@@ -14,6 +15,7 @@ class Extractor(nn.Module):
         self.skip_connection = skip_connection
         if backbone == 'resnet-50':
             self.model = models.resnet50(pretrained=True)
+            self.model = nn.Sequential(*list(self.model.children())[:-1])
             self.skip_idx = ['2', '4', '5', '6', '7', '8']
         
         elif backbone == 'resnet-101':
@@ -38,14 +40,17 @@ class Classifier(nn.Module):
                  input_dim=2048,
                  output_dim=config.DUKE_CLASS_NUM):
         super(Classifier, self).__init__()
+        self.avgpool = nn.AvgPool2d((7,7))
         self.linear = nn.Linear(input_dim, output_dim)
         self.softmax = nn.Softmax(dim=1)
 
     def forward(self, data):
+        data = self.avgpool(data)
         data = data.view(data.size()[0],-1)
         out = self.linear(data)
-        features = self.softmax(out)
-        return features
+        #features = self.softmax(out)
+        #return features
+        return out
 
 class Decoder(nn.Module):
     def __init__(self,
@@ -167,7 +172,8 @@ class AdaptReID(nn.Module):
         latent_feature = features[-1]
         extracted_feature = features[-2]
 
-        cls_vector = self.classifier(data=latent_feature)
+        #cls_vector = self.classifier(data=latent_feature)
+        cls_vector = self.classifier(data=extracted_feature)
 
         reconstruct = self.decoder(features=features)
 
