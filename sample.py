@@ -21,6 +21,8 @@ CUHK_CLASS_NUM = 1367
 # CUHK_CLASS_NUM = 1467
 
 
+CURRENT_DIR = os.getcwd()
+
 DATASET_DIR = '/home/yujheli/Project/ReID/reid_dataset'
 
 MARKET_DATA_DIR = os.path.join(DATASET_DIR, 'Market')
@@ -29,7 +31,7 @@ MSMT_DATA_DIR = os.path.join(DATASET_DIR, 'MSMT17_V1')
 CUHK_DATA_DIR = os.path.join(DATASET_DIR, 'CUHK03')
 
 
-CSV_DIR = '/home/yujheli/Project/ReID/reid_list'
+CSV_DIR = os.path.join(CURRENT_DIR, 'data/csv')
 
 MARKET_CSV_DIR = os.path.join(CSV_DIR, 'Market')
 DUKE_CSV_DIR = os.path.join(CSV_DIR, 'Duke')
