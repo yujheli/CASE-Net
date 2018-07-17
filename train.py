@@ -96,6 +96,8 @@ def main():
         classifier_output_dim = config.MARKET_CLASS_NUM
     elif args.source_dataset == 'MSMT':
         classifier_output_dim = config.MSMT_CLASS_NUM
+    elif args.source_dataset == 'CUHK':
+        classifier_output_dim = config.CUHK_CLASS_NUM
     
     model = AdaptReID(use_cuda=use_cuda,
                       classifier_output_dim=classifier_output_dim)
@@ -137,8 +139,8 @@ def main():
         for name, param in discriminator.state_dict().items():
             discriminator.state_dict()[name].copy_(checkpoint['discriminator.' + name])
 
-    model.train()
-    discriminator.train()
+    model.train() #?
+    discriminator.train() #?
 
     if not os.path.exists(args.model_dir):
         os.makedirs(args.model_dir)
@@ -151,6 +153,7 @@ def main():
         SourceData = Market
     elif args.source_dataset == 'MSMT':
         SourceData = MSMT
+        
 
     if args.target_dataset == 'Duke':
         TargetData = Duke

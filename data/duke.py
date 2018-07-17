@@ -26,7 +26,8 @@ class Duke(Dataset):
     
     def __init__(self, 
                  mode='source',
-                 dataset_path=config.DUKE_DIR,
+                 dataset_path=config.DUKE_DATA_DIR,
+                 csv_path=config.DUKE_CSV_DIR,
                  image_size=(config.IMAGE_HEIGHT, config.IMAGE_WIDTH),
                  downsample_scale=None,
                  transform=None,
@@ -34,13 +35,17 @@ class Duke(Dataset):
 
         self.image_height, self.image_width = image_size
         self.dataset_path = dataset_path 
+        self.csv_path = csv_path
+        self.mode = mode
         self.csv = self.get_csv(mode)
         self.image_names = self.csv.iloc[:,0]
         self.image_labels = self.csv.iloc[:,1]
+        if self.mode == 'test' or self.mode == 'query':
+            self.camera_id = self.csv.iloc[:,2].as_matrix().astype('int')
         self.random_crop = random_crop
         self.downsample_scale = downsample_scale
         self.transform = transform
-        self.affineTnf = GeometricTnf(out_h=self.image_height, 
+        self.affineTnf = GeometricTnf(out_h=self.image_height, # Use for image resizing
                                       out_w=self.image_width, 
                                       use_cuda=False) 
  
@@ -55,6 +60,10 @@ class Duke(Dataset):
                     'label': label,
                     'rec_image': rec_image}
 
+        if self.mode == 'test' or self.mode == 'query':
+            camera_id = self.camera_id[idx]
+            database['camera_id'] = camera_id
+
         if self.transform:
             database = self.transform(database)
         
@@ -62,11 +71,13 @@ class Duke(Dataset):
 
     def get_csv(self, mode):
         if mode == 'source':
-            csv_path = os.path.join(self.dataset_path, 'all_list.csv')
+            csv_path = os.path.join(self.csv_path, config.SOURCE_DATA_CSV)
         elif mode == 'train':
-            csv_path = os.path.join(self.dataset_path, 'train_list.csv')
-        else:
-            csv_path = os.path.join(self.dataset_path, 'test_list.csv')
+            csv_path = os.path.join(self.csv_path, config.TRAIN_DATA_CSV)
+        elif mode == 'test':
+            csv_path = os.path.join(self.csv_path, config.TEST_DATA_CSV)
+        else: # query
+            csv_path = os.path.join(self.csv_path, config.QUERY_DATA_CSV)
 
         return pd.read_csv(csv_path)
 

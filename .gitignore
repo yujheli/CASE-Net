@@ -12,3 +12,6 @@ pretrain
 
 # trained model directory
 trained_models
+
+# .ipynb_checkpoints
+.ipynb_checkpoints
