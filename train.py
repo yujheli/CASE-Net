@@ -17,6 +17,7 @@ from loss.loss import ReconstructionLoss
 from data.duke import Duke
 from data.market import Market
 from data.msmt import MSMT
+from data.cuhk import CUHK
 from parser.parser import ArgumentParser
 import config
 
@@ -26,7 +27,8 @@ args, arg_groups = ArgumentParser(mode='train').parse()
 
 
 def loss_rec(pred, gt, use_cuda=True):
-    criterion = ReconstructionLoss(dist_metric='L1', use_cuda=use_cuda)
+    criterion = ReconstructionLoss(dist_metric='L1', 
+                                   use_cuda=use_cuda)
     loss = criterion(pred, gt)
     return loss
 
@@ -58,6 +60,7 @@ def adjust_model_lr(optimizer, idx):
     optimizer.param_groups[0]['lr'] = lr
     if len(optimizer.param_groups) > 1:
         optimizer.param_groups[1]['lr'] = lr * 10
+    return
 
 
 def adjust_discriminator_lr(optimizer, idx):
@@ -65,6 +68,7 @@ def adjust_discriminator_lr(optimizer, idx):
     optimizer.param_groups[0]['lr'] = lr
     if len(optimizer.param_groups) > 1:
         optimizer.param_groups[1]['lr'] = lr * 10
+    return
 
 
 def save_model(model, discriminator, step):
@@ -139,8 +143,8 @@ def main():
         for name, param in discriminator.state_dict().items():
             discriminator.state_dict()[name].copy_(checkpoint['discriminator.' + name])
 
-    model.train() #?
-    discriminator.train() #?
+    model.train()
+    discriminator.train()
 
     if not os.path.exists(args.model_dir):
         os.makedirs(args.model_dir)
@@ -153,6 +157,8 @@ def main():
         SourceData = Market
     elif args.source_dataset == 'MSMT':
         SourceData = MSMT
+    elif args.source_dataset == 'CUHK':
+        SourceData = CUHK
         
 
     if args.target_dataset == 'Duke':
@@ -161,6 +167,8 @@ def main():
         TargetData = Market
     elif args.target_dataset == 'MSMT':
         TargetData = MSMT
+    elif args.target_dataset == 'CUHK':
+        TargetData = CUHK
 
     source_data = SourceData(mode='train',
                              downsample_scale=None,
