@@ -326,7 +326,6 @@ def main():
 
 
             """ Train Target Data """
-            _, batch = target_iter.next()
             try:
                 _, batch = target_iter.next()
             except:
