@@ -10,7 +10,7 @@ from scipy.spatial.distance import cdist
 
 def eval_metric(args, model, test_loader, query_loader):
     if args.eval_metric == 'rank':
-        rank_metric(args, model, test_loader, query_loader)
+        return rank_metric(args, model, test_loader, query_loader)
 
     elif args.eval_metric == 'mAP':
         pass
@@ -85,7 +85,7 @@ def rank_metric(args, model, test_loader, query_loader):
                     break
     rank_1 = np.mean(CMC[:,0])
     print('rank1:', rank_1)
-    return
+    return rank_1
 
 
 def mAP_metric(model, dataloader):

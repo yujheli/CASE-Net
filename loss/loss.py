@@ -25,7 +25,6 @@ class ClassificationLoss(nn.Module):
         batch = gt.size()[0]
 
         if self.use_cuda:
-            #loss = F.cross_entropy(predict, gt.cuda(), weight=weight)
             criterion = nn.CrossEntropyLoss().cuda()
             loss = criterion(predict, gt.cuda())
         else:

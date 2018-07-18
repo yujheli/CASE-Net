@@ -255,6 +255,17 @@ def main():
     """ Initialize writer """
     writer = SummaryWriter()
 
+    
+    """ Train Model and Fix Discriminator """
+    for param in model.extractor.parameters():
+        param.requires_grad = False
+
+    """ Train Model and Fix Discriminator """
+    for param in model.classifier.parameters():
+        param.requires_grad = False
+
+    best_rank1 = 0
+
     """ Starts Training """
     for step in range(args.num_steps):
     
@@ -403,7 +414,14 @@ def main():
         if (step+1) % 1000 == 0:
             print('Start evaluation...')
             model.eval()
-            eval_metric(args, model, test_loader, query_loader)
+            rank1 = eval_metric(args, model, test_loader, query_loader)
+            
+            writer.add_scalar('rank_1', rank1, (step+1)/1000)
+
+            if rank1 >= best_rank1:
+                best_rank1 = rank1
+                save_model(model, discriminator, step+1)
+
 
         print('[{0:6d}/{1:6d}] cls: {2:.6f} rec: {3:.3f} contra: {4:.3f} adv: {5:.3f} dis: {6:.3f}'.format(step+1, 
             args.num_steps, cls_loss_value, rec_loss_value, contra_loss_value, adv_target_loss_value, dis_loss_value))

@@ -120,7 +120,7 @@ class Decoder(nn.Module):
             nn.LeakyReLU(negative_slope=0.2, inplace=True),
             nn.Conv2d(channel_list[5], channel_list[5], kernel_size=3, padding=1),
             nn.BatchNorm2d(channel_list[5]),
-            nn.Sigmoid()
+            nn.Tanh()
         )
 
     def forward(self, features):
