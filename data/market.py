@@ -39,8 +39,7 @@ class Market(Dataset):
         self.csv = self.get_csv(mode)
         self.image_names = self.csv['image_path']
         self.image_labels = self.csv['id']
-        if self.mode == 'source' or self.mode == 'train':
-            self.downsample_scale = self.csv['downsample'].as_matrix().astype('int')
+        self.downsample_scale = self.csv['downsample'].as_matrix().astype('int')
         if self.mode == 'test' or self.mode == 'query':
             self.camera_id = self.csv['camera'].as_matrix().astype('int')
         self.random_crop = random_crop
@@ -107,27 +106,14 @@ class Market(Dataset):
         image = np.expand_dims(image.transpose((2,0,1)),0)
         image = torch.Tensor(image.astype(np.float32))
 
-        """ Down Sampling """
-        if self.mode == 'train' or self.mode == 'source':
-            if self.downsample_scale[idx] > 1:
-                downsampled_image = self.downsample(image, self.downsample_scale[idx])
-                downsampled_image_var = Variable(downsampled_image, requires_grad=False)
-                downsampled_image = self.affineTnf(downsampled_image_var).data.squeeze(0)
+        downsampled_image = self.downsample(image, self.downsample_scale[idx])
+        downsampled_image_var = Variable(downsampled_image, requires_grad=False)
+        downsampled_image = self.affineTnf(downsampled_image_var).data.squeeze(0)
 
-                image_var = Variable(image, requires_grad=False)
-                image = self.affineTnf(image_var).data.squeeze(0)
+        image_var = Variable(image, requires_grad=False)
+        image = self.affineTnf(image_var).data.squeeze(0)
         
-                return downsampled_image, image
-
-            else:
-                image_var = Variable(image, requires_grad=False)
-                image = self.affineTnf(image_var).data.squeeze(0)
-                return image, image
-
-        else:
-            image_var = Variable(image, requires_grad=False)
-            image = self.affineTnf(image_var).data.squeeze(0)
-            return image, image
+        return downsampled_image, image
 
     def downsample(self, image, downsample_scale=2):
         kernel = (downsample_scale, downsample_scale)
@@ -137,6 +123,4 @@ class Market(Dataset):
     def get_label(self, label_list, idx):
         label = label_list[idx]
         label = Variable(torch.from_numpy(np.array(label, dtype='int32')).long())
-        #label = int(label_list[idx])
-        #label = Variable(torch.LongTensor([label]))
         return label

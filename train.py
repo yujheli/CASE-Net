@@ -20,9 +20,16 @@ from data.msmt import MSMT
 from data.cuhk import CUHK
 from parser.parser import ArgumentParser
 from util.eval_util import eval_metric
-# from tensorboardX import SummaryWriter 
+from tensorboardX import SummaryWriter 
+from torchvision.utils import make_grid, save_image # Newly added
+from torchvision import transforms # Newly added
 import config
 
+""" Unnormalize """
+inv_normalize = transforms.Normalize(
+    mean=[-0.485/0.229, -0.456/0.224, -0.406/0.255],
+    std=[1/0.229, 1/0.224, 1/0.255]
+)
 
 """ Parse Arguments """ 
 args, arg_groups = ArgumentParser(mode='train').parse()
@@ -108,7 +115,6 @@ def main():
     #model = AdaptReID(backbone=args.backbone,
     model = AdaptReID(backbone='resnet-50',
                       use_cuda=use_cuda,
-                      #skip_connection=False,
                       classifier_output_dim=classifier_output_dim)
 
     if args.model_path:
@@ -213,6 +219,7 @@ def main():
                              batch_size=int(args.batch_size/2),
                              num_workers=args.num_workers,
                              pin_memory=True)
+    
 
     query_data = QueryData(mode='query',
                            transform=NormalizeImage(['image']))
@@ -244,7 +251,9 @@ def main():
 
     source_label = 0
     target_label = 1
-
+    
+    """ Initialize writer """
+    writer = SummaryWriter()
 
     """ Starts Training """
     for step in range(args.num_steps):
@@ -302,9 +311,19 @@ def main():
 
             loss = loss / args.iter_size
             loss.backward()
-        
+            
+ 
+            ''' write image '''
+            for i in range(len(rec_source)):
+                rec_source[i] = inv_normalize(rec_source[i])
+                image[i] = inv_normalize(image[i])
+
+            writer.add_image('source image', make_grid(image, nrow=8), step+1)
+            writer.add_image('source reconstructed image', make_grid(rec_source, nrow=8), step+1)
+
 
             """ Train Target Data """
+            _, batch = target_iter.next()
             try:
                 _, batch = target_iter.next()
             except:
@@ -313,6 +332,7 @@ def main():
 
             image = batch['image'].cuda(args.gpu)
             rec_image = batch['rec_image'].cuda(args.gpu)
+
 
             latent_target, extracted_target, cls_target, rec_target = model(image)
 
@@ -335,6 +355,15 @@ def main():
 
             loss = loss / args.iter_size
             loss.backward()
+            
+
+            ''' write image '''
+            for i in range(len(rec_target)):
+                rec_target[i] = inv_normalize(rec_target[i])
+                image[i] = inv_normalize(image[i])
+
+            writer.add_image('target image', make_grid(image, nrow=8), step+1)
+            writer.add_image('target reconstructed image', make_grid(rec_target, nrow=8), step+1)
 
 
             """ Train Discriminator """
@@ -378,6 +407,14 @@ def main():
 
         print('[{0:6d}/{1:6d}] cls: {2:.6f} rec: {3:.3f} contra: {4:.3f} adv: {5:.3f} dis: {6:.3f}'.format(step+1, 
             args.num_steps, cls_loss_value, rec_loss_value, contra_loss_value, adv_target_loss_value, dis_loss_value))
+        
+        """ Write scalar """
+        writer.add_scalar('class_loss', cls_loss_value, step+1)
+        writer.add_scalar('recon_loss', rec_loss_value, step+1)
+        writer.add_scalar('ctrs_loss', contra_loss_value, step+1)
+        writer.add_scalar('advG_loss', adv_target_loss_value, step+1)
+        writer.add_scalar('advD_loss', dis_loss_value, step+1)
+        
 
         if step >= args.num_steps_stop - 1:
             print('Saving model...')
