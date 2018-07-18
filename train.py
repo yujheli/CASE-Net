@@ -131,19 +131,19 @@ def main():
         print("Loading pre-trained extractor...")
         checkpoint = torch.load(args.extractor_path, map_location=lambda storage, loc: storage)
         for name, param in model.extractor.state_dict().items():
-            model.extractor.state_dict()[name].copy_(checkpoint['extractor.' + name])    
+            model.extractor.state_dict()[name].copy_(checkpoint[name])    
 
     if args.decoder_path:
         print("Loading pre-trained decoder...")
         checkpoint = torch.load(args.decoder_path, map_location=lambda storage, loc: storage)
         for name, param in model.decoder.state_dict().items():
-            model.decoder.state_dict()[name].copy_(checkpoint['decoder.' + name])    
+            model.decoder.state_dict()[name].copy_(checkpoint[name])    
 
     if args.classifier_path:
         print("Loading pre-trained classifier...")
         checkpoint = torch.load(args.classifier_path, map_location=lambda storage, loc: storage)
         for name, param in model.classifier.state_dict().items():
-            model.classifier.state_dict()[name].copy_(checkpoint['classifier.' + name])    
+            model.classifier.state_dict()[name].copy_(checkpoint[name])    
 
 
     """ Initialize Discriminator """
@@ -153,7 +153,7 @@ def main():
         print("loading pretrained discriminator...")
         checkpoint = torch.load(args.discriminator_path, map_location=lambda storage, loc: storage)
         for name, param in discriminator.state_dict().items():
-            discriminator.state_dict()[name].copy_(checkpoint['discriminator.' + name])
+            discriminator.state_dict()[name].copy_(checkpoint[name])
 
 
     if not os.path.exists(args.model_dir):
@@ -256,14 +256,6 @@ def main():
     writer = SummaryWriter()
 
     
-    """ Train Model and Fix Discriminator """
-    for param in model.extractor.parameters():
-        param.requires_grad = False
-
-    """ Train Model and Fix Discriminator """
-    for param in model.classifier.parameters():
-        param.requires_grad = False
-
     best_rank1 = 0
 
     """ Starts Training """
@@ -421,6 +413,8 @@ def main():
             if rank1 >= best_rank1:
                 best_rank1 = rank1
                 save_model(model, discriminator, step+1)
+
+            print('rank 1:', rank1, 'best:', best_rank1)
 
 
         print('[{0:6d}/{1:6d}] cls: {2:.6f} rec: {3:.3f} contra: {4:.3f} adv: {5:.3f} dis: {6:.3f}'.format(step+1, 

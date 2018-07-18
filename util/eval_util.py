@@ -84,7 +84,6 @@ def rank_metric(args, model, test_loader, query_loader):
                 if counter == args.rank:
                     break
     rank_1 = np.mean(CMC[:,0])
-    print('rank1:', rank_1)
     return rank_1
 
 
