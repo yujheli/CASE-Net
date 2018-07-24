@@ -1,24 +1,30 @@
 import os
 
-IMAGE_HEIGHT = 224
-IMAGE_WIDTH = 224
+IMAGE_HEIGHT = 256
+IMAGE_WIDTH = 128
 
-MEAN = [0.485, 0.456, 0.406] # ImageNet Pre-trained Mean
-STDDEV = [0.229, 0.224, 0.225] # ImageNet Pre-trained STDDEV
+#MEAN = [0.485, 0.456, 0.406] # ImageNet Pre-trained Mean
+#STDDEV = [0.229, 0.224, 0.225] # ImageNet Pre-trained STDDEV
+MEAN = [0.485, 0.456, 0.406]
+STDDEV = [0.229, 0.224, 0.225]
 
-SKIP_CONNECTION = True
+SKIP_CONNECTION = False
 
-# Train class number
-DUKE_CLASS_NUM = 702
-MARKET_CLASS_NUM = 751
-MSMT_CLASS_NUM = 1041
-CUHK_CLASS_NUM = 1367
+MODE = 'train'
 
-# ALL class number
-# DUKE_CLASS_NUM = 1812
-# MARKET_CLASS_NUM = 1501
-# MSMT_CLASS_NUM = 4101
-# CUHK_CLASS_NUM = 1467
+if MODE == 'train':
+    # Train class number
+    DUKE_CLASS_NUM = 702
+    MARKET_CLASS_NUM = 751
+    MSMT_CLASS_NUM = 1041
+    CUHK_CLASS_NUM = 1367
+
+elif MODE == 'all':
+    # ALL class number
+    DUKE_CLASS_NUM = 1812
+    MARKET_CLASS_NUM = 1501
+    MSMT_CLASS_NUM = 4101
+    CUHK_CLASS_NUM = 1467
 
 
 CURRENT_DIR = os.getcwd()
@@ -31,14 +37,19 @@ MSMT_DATA_DIR = os.path.join(DATASET_DIR, 'MSMT17_V1')
 CUHK_DATA_DIR = os.path.join(DATASET_DIR, 'CUHK03')
 
 
-CSV_DIR = os.path.join(CURRENT_DIR, 'data/csv')
+#CSV_DIR = os.path.join(CURRENT_DIR, 'data/csv')
+CSV_DIR = os.path.join(CURRENT_DIR, 'data/csv/reid_list_sample')
 
 MARKET_CSV_DIR = os.path.join(CSV_DIR, 'Market')
 DUKE_CSV_DIR = os.path.join(CSV_DIR, 'Duke')
 MSMT_CSV_DIR = os.path.join(CSV_DIR, 'MSMT17_V1')
 CUHK_CSV_DIR = os.path.join(CSV_DIR, 'CUHK03')
 
-SOURCE_DATA_CSV = 'all_list.csv'
-TRAIN_DATA_CSV = 'train_list.csv'
+if MODE == 'all':
+    SOURCE_DATA_CSV = 'all_list.csv'
+elif MODE == 'train':
+    SOURCE_DATA_CSV = 'train_list_1.csv'
+
+TRAIN_DATA_CSV = 'train_list_2.csv'
 QUERY_DATA_CSV = 'query_list.csv'
 TEST_DATA_CSV = 'test_list.csv'
