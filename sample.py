@@ -5,8 +5,8 @@ IMAGE_WIDTH = 128
 
 #MEAN = [0.485, 0.456, 0.406] # ImageNet Pre-trained Mean
 #STDDEV = [0.229, 0.224, 0.225] # ImageNet Pre-trained STDDEV
-MEAN = [0.485, 0.456, 0.406]
-STDDEV = [0.229, 0.224, 0.225]
+MEAN = [0.5, 0.5, 0.5]
+STDDEV = [0.5, 0.5, 0.5]
 
 SKIP_CONNECTION = False
 
