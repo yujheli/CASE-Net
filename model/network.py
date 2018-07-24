@@ -15,13 +15,15 @@ class Extractor(nn.Module):
         self.skip_connection = skip_connection
         if backbone == 'resnet-50':
             self.model = models.resnet50(pretrained=True)
-            self.model = nn.Sequential(*list(self.model.children())[:-1])
-            self.skip_idx = ['2', '4', '5', '6', '7', '8']
+            self.model = nn.Sequential(*list(self.model.children())[:-2])
+            #self.skip_idx = ['2', '4', '5', '6', '7', '8']
+            self.skip_idx = ['2', '4', '5', '6', '7']
         
         elif backbone == 'resnet-101':
             self.model = models.resnet101(pretrained=True)
-            self.model = nn.Sequential(*list(self.model.children())[:-1])
-            self.skip_idx = ['2', '4', '5', '6', '7', '8']
+            self.model = nn.Sequential(*list(self.model.children())[:-2])
+            #self.skip_idx = ['2', '4', '5', '6', '7', '8']
+            self.skip_idx = ['2', '4', '5', '6', '7']
 
     def forward(self, data):
         skip_features = []
@@ -30,26 +32,19 @@ class Extractor(nn.Module):
             if idx in self.skip_idx:
                 skip_features.append(data)
         
-        if self.skip_connection:
-            return skip_features
-        else:
-            return skip_features[-2:]
+        return skip_features
 
 class Classifier(nn.Module):
     def __init__(self,
                  input_dim=2048,
                  output_dim=config.DUKE_CLASS_NUM):
         super(Classifier, self).__init__()
-        self.avgpool = nn.AvgPool2d((7,7))
         self.linear = nn.Linear(input_dim, output_dim)
         self.softmax = nn.Softmax(dim=1)
 
     def forward(self, data):
-        data = self.avgpool(data)
         data = data.view(data.size()[0],-1)
         out = self.linear(data)
-        #features = self.softmax(out)
-        #return features
         return out
 
 class Decoder(nn.Module):
@@ -125,7 +120,7 @@ class Decoder(nn.Module):
 
     def forward(self, features):
         if self.skip_connection:
-            f1, f2, f3, f4, f5, _ = features
+            f1, f2, f3, f4, f5 = features
             block1 = self.block1(f5)
             block2 = self.block2(block1+f4)
             block3 = self.block3(block2+f3)
@@ -133,9 +128,9 @@ class Decoder(nn.Module):
             block5 = self.block5(block4+f1)
             return block5
         else:
-            f5, _ = features
+            f1, f2, f3, f4, f5 = features
             block1 = self.block1(f5)
-            block2 = self.block2(block1)
+            block2 = self.block2(block1+f4)
             block3 = self.block3(block2)
             block4 = self.block4(block3)
             block5 = self.block5(block4)
@@ -160,6 +155,8 @@ class AdaptReID(nn.Module):
 
         self.skip_connection = skip_connection
 
+        self.avgpool = nn.AvgPool2d((8,4))
+
         if use_cuda:
             self.extractor = self.extractor.cuda()
             self.decoder = self.decoder.cuda()
@@ -169,15 +166,16 @@ class AdaptReID(nn.Module):
 
         features = self.extractor(data=data)
 
-        latent_feature = features[-1]
-        extracted_feature = features[-2]
+        extracted_feature = features[-1]
+        higher_feature = features[-2]
 
-        #cls_vector = self.classifier(data=latent_feature)
-        cls_vector = self.classifier(data=extracted_feature)
+        latent_feature = self.avgpool(extracted_feature)
+
+        cls_vector = self.classifier(data=latent_feature)
 
         reconstruct = self.decoder(features=features)
 
-        return latent_feature, extracted_feature, cls_vector, reconstruct
+        return latent_feature, features, cls_vector, reconstruct
 
  
 if __name__ == '__main__':

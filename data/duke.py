@@ -99,9 +99,10 @@ class Duke(Dataset):
             right = int(3*w/4+np.random.randint(w/4))
             image = image[top:bottom, left:right, :]
  
-        """ Flip Image """
-        if random.random() > 0.5:
-            image = np.flip(image, 1) 
+        if self.mode == 'train' or self.mode == 'source':
+            """ Flip Image """
+            if random.random() > 0.5:
+                image = np.flip(image, 1) 
 
         image = np.expand_dims(image.transpose((2,0,1)),0)
         image = torch.Tensor(image.astype(np.float32))

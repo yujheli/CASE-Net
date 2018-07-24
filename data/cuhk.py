@@ -62,6 +62,7 @@ class CUHK(Dataset):
             database['rec_image'] = rec_image
 
         elif self.mode == 'train':
+            database['label'] = label
             database['rec_image'] = rec_image
 
         elif self.mode == 'test' or self.mode == 'query':
@@ -94,15 +95,16 @@ class CUHK(Dataset):
         """ Random Cropping """
         if self.random_crop:
             h,w,c = image.shape
-            top = np.random.randint(h/4)
-            bottom = int(3*h/4+np.random.randint(h/4))
-            left = np.random.randint(w/4)
-            right = int(3*w/4+np.random.randint(w/4))
+            top = np.random.randint(h/8)
+            bottom = int(7*h/8+np.random.randint(h/8))
+            left = np.random.randint(w/8)
+            right = int(7*w/8+np.random.randint(w/8))
             image = image[top:bottom, left:right, :]
  
-        """ Flip Image """
-        if random.random() > 0.5:
-            image = np.flip(image, 1) 
+        if self.mode == 'train' or self.mode == 'source':
+            """ Flip Image """
+            if random.random() > 0.5:
+                image = np.flip(image, 1) 
 
         image = np.expand_dims(image.transpose((2,0,1)),0)
         image = torch.Tensor(image.astype(np.float32))
