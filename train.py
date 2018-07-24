@@ -366,17 +366,17 @@ def main():
             if args.rec_loss:
                 rec_loss = loss_rec(pred=rec_target, gt=rec_image, use_cuda=use_cuda)
                 loss += args.w_rec * rec_loss
-                rec_loss_value += rec_loss.data.cpu().numpy() / args.iter_size / 2
+                rec_loss_value += rec_loss.data.cpu().numpy() / args.iter_size / 2.0
 
             if args.cls_loss:
                 cls_loss = loss_cls(pred=cls_target, gt=label, use_cuda=use_cuda)
                 loss += args.w_cls * cls_loss
-                cls_loss_value += cls_loss.data.cpu().numpy() / args.iter_size / 2
+                cls_loss_value += cls_loss.data.cpu().numpy() / args.iter_size / 2.0
  
             if args.contra_loss:
                 contra_loss = loss_contra(pred=latent_target, gt=label)
                 loss += args.w_contra * contra_loss
-                contra_loss_value += contra_loss.data.cpu().numpy() / args.iter_size / 2
+                contra_loss_value += contra_loss.data.cpu().numpy() / args.iter_size / 2.0
 
             if args.adv_loss:
                 D1_adv_loss = loss_adv(pred=D1_output, gt=D1_tensor)
@@ -385,7 +385,7 @@ def main():
                 D2_adv_loss = loss_adv(pred=D2_output, gt=D2_tensor)
                 D2_adv_loss_value += D2_adv_loss.data.cpu().numpy() / args.iter_size
 
-                loss += args.w_adv * (D1_adv_loss + D2_adv_loss)
+                loss += args.w_adv * D1_adv_loss +  args.w_adv * D2_adv_loss / 10.0
 
             loss = loss / args.iter_size
             loss.backward()
@@ -419,13 +419,13 @@ def main():
             D2_tensor = Variable(torch.FloatTensor(D2_output.data.size()).fill_(HR_label)).cuda(args.gpu)
 
             if args.dis_loss:
-                D1_dis_loss = loss_adv(pred=D1_output, gt=D1_tensor) / args.iter_size / 2
+                D1_dis_loss = loss_adv(pred=D1_output, gt=D1_tensor) / args.iter_size / 2.0
                 D1_dis_loss_value += D1_dis_loss.data.cpu().numpy()
 
-                D2_dis_loss = loss_adv(pred=D2_output, gt=D2_tensor) / args.iter_size / 2
+                D2_dis_loss = loss_adv(pred=D2_output, gt=D2_tensor) / args.iter_size / 2.0
                 D2_dis_loss_value += D2_dis_loss.data.cpu().numpy()
 
-                loss = args.w_dis * (D1_dis_loss + D2_dis_loss)
+                loss = args.w_dis * D1_dis_loss + args.w_dis * D2_dis_loss / 10.0
                 loss.backward()
 
 
@@ -440,13 +440,13 @@ def main():
             D2_tensor = Variable(torch.FloatTensor(D2_output.data.size()).fill_(LR_label)).cuda(args.gpu)
 
             if args.dis_loss:
-                D1_dis_loss = loss_adv(pred=D1_output, gt=D1_tensor) / args.iter_size / 2
+                D1_dis_loss = loss_adv(pred=D1_output, gt=D1_tensor) / args.iter_size / 2.0
                 D1_dis_loss_value += D1_dis_loss.data.cpu().numpy()
 
-                D2_dis_loss = loss_adv(pred=D2_output, gt=D2_tensor) / args.iter_size / 2
+                D2_dis_loss = loss_adv(pred=D2_output, gt=D2_tensor) / args.iter_size / 2.0
                 D2_dis_loss_value += D2_dis_loss.data.cpu().numpy()
 
-                loss = args.w_dis * (D1_dis_loss + D2_dis_loss)
+                loss = args.w_dis * D1_dis_loss + args.w_dis *  D2_dis_loss / 10.0
                 loss.backward()
 
         model_opt.step()
