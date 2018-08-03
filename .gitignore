@@ -21,3 +21,6 @@ image
 
 # runs
 runs
+
+# python3 caches
+__pycache__

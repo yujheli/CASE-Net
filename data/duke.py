@@ -47,6 +47,11 @@ class Duke(Dataset):
         self.affineTnf = GeometricTnf(out_h=self.image_height, # Use for image resizing
                                       out_w=self.image_width, 
                                       use_cuda=False) 
+        self.ids_to_im_inds = dict()
+        for ind, id_ in enumerate(self.image_labels):
+            self.ids_to_im_inds[id_].append(ind)
+        self.ids = self.ids_to_im_inds.keys()
+         
  
     def __len__(self):
         return len(self.csv)

@@ -23,8 +23,7 @@ def extract_feature(dataloader, model):
         image = batch['image'].cuda()
         label = batch['label']
         camera_id = batch['camera_id']
-        #_, latent_feature = model(image)
-        latent_feature, _, _, _ = model(image)
+        latent_feature, _, _, _, _, _ = model(image)
         b = latent_feature.size()[0]
         latent_feature = latent_feature.view(b, -1)
         latent_feature = latent_feature.data.cpu().numpy()

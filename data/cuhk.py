@@ -10,6 +10,8 @@ from torch.utils.data import Dataset
 import random
 import config
 from transform.transform import GeometricTnf
+from torchvision import transforms
+
 
 class CUHK(Dataset):
     """
@@ -30,7 +32,8 @@ class CUHK(Dataset):
                  csv_path=config.CUHK_CSV_DIR,
                  image_size=(config.IMAGE_HEIGHT, config.IMAGE_WIDTH),
                  transform=None,
-                 random_crop=False): 
+                 random_crop=False,
+                 im_per_id=4): 
 
         self.image_height, self.image_width = image_size
         self.dataset_path = dataset_path 
@@ -46,35 +49,81 @@ class CUHK(Dataset):
         self.transform = transform
         self.affineTnf = GeometricTnf(out_h=self.image_height, # Use for image resizing
                                       out_w=self.image_width, 
-                                      use_cuda=False)  
+                                      use_cuda=False)
+        self.im_per_id = im_per_id
+
+        self.hash_table = self.set_dict()
+
+        self.normalize = transforms.Normalize(
+            mean=[0.5, 0.5, 0.5],
+            std=[0.5, 0.5, 0.5]
+        )
+    
+    def set_dict(self):
+        hash_table = dict()
+        for idx in range(len(self.csv)):
+            label = int(self.image_labels[idx])
+            if label not in hash_table:
+                hash_table[label] = []
+                hash_table[label].append(idx)
+            else:
+                hash_table[label].append(idx)
+        return hash_table
  
     def __len__(self):
-        return len(self.csv)
+        if self.mode == 'test' or self.mode == 'query':
+            return len(self.csv)
+        else:
+            return len(self.hash_table)
+
 
     def __getitem__(self, idx):
-        input_image, rec_image = self.get_image(self.image_names, idx)
-        label = self.get_label(self.image_labels, idx)
-
-        database = {'image': input_image} 
         
-        if self.mode == 'source':
-            database['label'] = label
-            database['rec_image'] = rec_image
+        if self.mode == 'test' or self.mode == 'query':
+            input_image, rec_image = self.get_image(self.image_names, idx)
+            label = self.get_label(self.image_labels, idx)
 
-        elif self.mode == 'train':
-            database['label'] = label
-            database['rec_image'] = rec_image
+            database = {'image': input_image} 
 
-        elif self.mode == 'test' or self.mode == 'query':
             camera_id = self.camera_id[idx]
             database['camera_id'] = camera_id
             database['label'] = label
 
+            if self.transform:
+                database = self.transform(database)
 
-        if self.transform:
-            database = self.transform(database)
-        
-        return database
+            return database
+
+        else:
+            inds = self.hash_table[idx]
+            if len(inds) < self.im_per_id:
+                inds = np.random.choice(inds, self.im_per_id, replace=False)
+            else:
+                inds = np.random.choice(inds, self.im_per_id, replace=False)
+
+            input_image_list = []
+            input_rec_list = []
+            for id_ in inds:
+                input_image, rec_image = self.get_image(self.image_names, id_)
+                input_image_list.append(self.normalize(input_image/255.0).unsqueeze(0))
+                input_rec_list.append(self.normalize(rec_image/255.0).unsqueeze(0))
+
+            input_image_list = torch.cat(input_image_list)
+            input_rec_list = torch.cat(input_rec_list)
+
+            label = Variable(torch.from_numpy(np.array([idx] * self.im_per_id, dtype='int32')).long())
+
+            database = {'image': input_image_list} 
+
+            if self.mode == 'source':
+                database['label'] = label
+                database['rec_image'] = input_rec_list #rec_image
+
+            elif self.mode == 'train':
+                database['label'] = label
+                database['rec_image'] = input_rec_list #rec_image
+
+            return database
 
     def get_csv(self, mode):
         if mode == 'source':
@@ -117,7 +166,7 @@ class CUHK(Dataset):
         image = self.affineTnf(image_var).data.squeeze(0)
 
         return downsampled_image, image
-
+    
     def downsample(self, image, downsample_scale=2):
         kernel = (downsample_scale, downsample_scale)
         downsampled_image = F.max_pool2d(image, kernel)

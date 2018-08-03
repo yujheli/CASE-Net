@@ -142,7 +142,8 @@ class AdaptReID(nn.Module):
                  skip_connection=config.SKIP_CONNECTION,
                  classifier_input_dim=2048,
                  classifier_output_dim=config.DUKE_CLASS_NUM,
-                 use_cuda=True):
+                 use_cuda=True,
+                 local_conv_out_channels=128):
         super(AdaptReID, self).__init__()
 
         self.extractor = Extractor(backbone=backbone)
@@ -156,30 +157,45 @@ class AdaptReID(nn.Module):
         self.skip_connection = skip_connection
 
         self.avgpool = nn.AvgPool2d((8,4))
+        
+        #local feature
+        self.local_conv = nn.Conv2d(classifier_input_dim, local_conv_out_channels, 1)
+        self.local_bn = nn.BatchNorm2d(local_conv_out_channels)
+        self.local_relu = nn.ReLU(inplace=True)
 
         if use_cuda:
             self.extractor = self.extractor.cuda()
             self.decoder = self.decoder.cuda()
             self.classifier = self.classifier.cuda()
-
+            self.local_conv = self.local_conv.cuda()
+            self.local_bn = self.local_bn.cuda()
+            self.local_relu = self.local_relu.cuda()
+ 
     def forward(self, data):
 
         features = self.extractor(data=data)
 
         extracted_feature = features[-1]
-        higher_feature = features[-2]
 
         latent_feature = self.avgpool(extracted_feature)
 
         cls_vector = self.classifier(data=latent_feature)
 
         reconstruct = self.decoder(features=features)
+        
+        # shape [N, C]
+        global_feat = latent_feature.view(latent_feature.size(0), -1)
+        # shape [N, C, H, 1]
+        local_feat = torch.mean(extracted_feature, -1, keepdim=True)
+        local_feat = self.local_relu(self.local_bn(self.local_conv(local_feat)))
+        # shape [N, H, c]
+        local_feat = local_feat.squeeze(-1).permute(0, 2, 1)
 
-        return latent_feature, features, cls_vector, reconstruct
+        return latent_feature, features, cls_vector, reconstruct, global_feat, local_feat
 
  
 if __name__ == '__main__':
-    data = Variable(torch.rand(4,3,224,224)).cuda()
+    data = Variable(torch.rand(4,3,256,128)).cuda()
     
     '''
     extractor = Extractor(backbone='resnet-101')
