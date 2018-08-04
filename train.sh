@@ -2,7 +2,7 @@ rm -rf runs
 
 MODEL_DIR=trained_models
 NUM_WORKERS=2
-GPU=1
+GPU=0
 
 BATCH_SIZE=16
 LEARNING_RATE=0.001
@@ -27,18 +27,18 @@ DISCRIMINATOR_PATH=$PRETRAINED_DIR/Discriminator_${SOURCE_DATASET}_pretrain.pth.
 
 RANDOM_CROP=False
 
-REC_LOSS=True
-CLS_LOSS=True
-ADV_LOSS=True
-DIS_LOSS=True
-TRIPLET_LOSS=True
+REC_LOSS=False
+CLS_LOSS=False
+ADV_LOSS=False
+DIS_LOSS=False
+TRIPLET_LOSS=False
 
-W_REC=10.0
+W_REC=1.0
 W_CLS=1.0
 W_ADV=0.01
 W_DIS=0.01
 W_GLOBAL=1.0
-W_LOCAL=0.5
+W_LOCAL=1.0
 
 python3 train.py --model-dir $MODEL_DIR \
                  --num-workers $NUM_WORKERS \
@@ -64,7 +64,7 @@ python3 train.py --model-dir $MODEL_DIR \
                  --w-dis $W_DIS \
                  --w-global $W_GLOBAL \
                  --w-local $W_LOCAL \
-                 --decoder-path $DECODER_PATH \
-                 --extractor-path $EXTRACTOR_PATH \
-                 --classifier-path $CLASSIFIER_PATH
+                 #--decoder-path $DECODER_PATH \
+                 #--extractor-path $EXTRACTOR_PATH \
+                 #--classifier-path $CLASSIFIER_PATH
                  #--discriminator-path $DISCRIMINATOR_PATH

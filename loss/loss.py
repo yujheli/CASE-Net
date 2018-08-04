@@ -367,9 +367,11 @@ def LocalLoss(tri_loss, local_feat, p_inds=None, n_inds=None, labels=None, norma
     
     
 class TripletLoss(object):
-    """Modified from Tong Xiao's open-reid (https://github.com/Cysu/open-reid). 
-    Related Triplet Loss theory can be found in paper 'In Defense of the Triplet 
-    Loss for Person Re-Identification'."""
+    """
+        Modified from Tong Xiao's open-reid (https://github.com/Cysu/open-reid). 
+        Related Triplet Loss theory can be found in paper 'In Defense of the Triplet 
+        Loss for Person Re-Identification'.
+    """
     def __init__(self, margin=None):
         self.margin = margin
         if margin is not None:
@@ -379,13 +381,13 @@ class TripletLoss(object):
 
     def __call__(self, dist_ap, dist_an):
         """
-        Args:
-            dist_ap: pytorch Variable, distance between anchor and positive sample, 
-                shape [N]
-            dist_an: pytorch Variable, distance between anchor and negative sample, 
-                shape [N]
-        Returns:
-            loss: pytorch Variable, with shape [1]
+            Args:
+                dist_ap: pytorch Variable, distance between anchor and positive sample, 
+                    shape [N]
+                dist_an: pytorch Variable, distance between anchor and negative sample, 
+                    shape [N]
+            Returns:
+                loss: pytorch Variable, with shape [1]
         """
         y = Variable(dist_an.data.new().resize_as_(dist_an.data).fill_(1))
         if self.margin is not None:
