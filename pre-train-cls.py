@@ -46,7 +46,7 @@ def loss_cls(pred, gt, use_cuda=True):
     return loss
 
 
-def save_model(model, D_1, D_2=None):
+def save_model(model, D_1=None, D_2=None):
     extractor_path = os.path.join(args.model_dir, 'Extractor_{}.pth.tar'.format(args.source_dataset))
     classifier_path = os.path.join(args.model_dir, 'Classifier_{}.pth.tar'.format(args.source_dataset))
             
