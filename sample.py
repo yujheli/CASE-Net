@@ -27,6 +27,13 @@ elif MODE == 'all':
     CUHK_CLASS_NUM = 1467
 
 
+D1_INPUT_CHANNEL = 2048
+D1_FC_INPUT_DIM = 1024
+
+D2_INPUT_CHANNEL = 1024
+D2_FC_INPUT_DIM = 4096
+
+
 CURRENT_DIR = os.getcwd()
 
 DATASET_DIR = '/home/yujheli/Project/ReID/reid_dataset'
@@ -37,8 +44,7 @@ MSMT_DATA_DIR = os.path.join(DATASET_DIR, 'MSMT17_V1')
 CUHK_DATA_DIR = os.path.join(DATASET_DIR, 'CUHK03')
 
 
-#CSV_DIR = os.path.join(CURRENT_DIR, 'data/csv')
-CSV_DIR = os.path.join(CURRENT_DIR, 'data/csv/reid_list_sample')
+CSV_DIR = os.path.join(CURRENT_DIR, 'data/csv')
 
 MARKET_CSV_DIR = os.path.join(CSV_DIR, 'Market')
 DUKE_CSV_DIR = os.path.join(CSV_DIR, 'Duke')

@@ -17,16 +17,16 @@ IMAGE_STEPS=1000
 SOURCE_DATASET=CUHK
 TARGET_DATASET=CUHK
 
-PRETRAINED_DIR=/home/yujheli/Project/ycchen/pretrained/$SOURCE_DATASET
-DECODER_PATH=$PRETRAINED_DIR/Decoder_${SOURCE_DATASET}_pretrain.pth.tar
-EXTRACTOR_PATH=$PRETRAINED_DIR/Extractor_${SOURCE_DATASET}_pretrain.pth.tar
-CLASSIFIER_PATH=$PRETRAINED_DIR/Classifier_${SOURCE_DATASET}_pretrain.pth.tar
-DISCRIMINATOR_PATH=$PRETRAINED_DIR/Discriminator_${SOURCE_DATASET}_pretrain.pth.tar
+PRETRAINED_DIR=/home/dlcv_ta/Project/ycchen/pretrained/$SOURCE_DATASET/down_1_3
+DECODER_PATH=$PRETRAINED_DIR/Decoder_${SOURCE_DATASET}.pth.tar
+EXTRACTOR_PATH=$PRETRAINED_DIR/Extractor_${SOURCE_DATASET}.pth.tar
+CLASSIFIER_PATH=$PRETRAINED_DIR/Classifier_${SOURCE_DATASET}.pth.tar
+DISCRIMINATOR_PATH=$PRETRAINED_DIR/Discriminator_${SOURCE_DATASET}.pth.tar
 
 RANDOM_CROP=False
 
 REC_LOSS=True
-CLS_LOSS=False
+CLS_LOSS=True
 ADV_LOSS=True
 DIS_LOSS=True
 TRIPLET_LOSS=True
@@ -35,10 +35,10 @@ W_REC=1.0
 W_CLS=10.0
 W_ADV=0.01
 W_DIS=0.01
-W_GLOBAL=5.0
+W_GLOBAL=10.0
 W_LOCAL=5.0
 
-python3 train.py --model-dir $MODEL_DIR \
+python2 train.py --model-dir $MODEL_DIR \
                  --num-workers $NUM_WORKERS \
                  --source-dataset $SOURCE_DATASET \
                  --target-dataset $TARGET_DATASET \
@@ -62,7 +62,7 @@ python3 train.py --model-dir $MODEL_DIR \
                  --w-dis $W_DIS \
                  --w-global $W_GLOBAL \
                  --w-local $W_LOCAL \
-                 #--decoder-path $DECODER_PATH \
-                 #--extractor-path $EXTRACTOR_PATH \
-                 #--classifier-path $CLASSIFIER_PATH
+                 --extractor-path $EXTRACTOR_PATH \
+                 --classifier-path $CLASSIFIER_PATH \
+                 --decoder-path $DECODER_PATH \
                  #--discriminator-path $DISCRIMINATOR_PATH
