@@ -21,7 +21,7 @@ from data.market import Market
 from data.msmt import MSMT
 from data.cuhk import CUHK
 from parser.parser import ArgumentParser
-from util.eval_util import eval_metric
+from util.eval_utils import eval_metric
 from tensorboardX import SummaryWriter 
 from torchvision.utils import make_grid, save_image
 from torchvision import transforms
@@ -250,10 +250,8 @@ def main():
                         betas=(0.9, 0.99))
     D1_opt.zero_grad()
 
-
     HR_label = 0
     LR_label = 1
-
 
     """ Initialize writer """
     writer = SummaryWriter()
@@ -305,7 +303,7 @@ def main():
 
             if args.cls_loss:
                 cls_loss = loss_cls(pred=cls_source, gt=label, use_cuda=use_cuda)
-                cls_loss_value += cls_loss.data.cpu().numpy() / args.iter_size / 2
+                cls_loss_value += cls_loss.data.cpu().numpy() / args.iter_size / 2.0
                 loss += args.w_cls * cls_loss
  
  
@@ -314,8 +312,8 @@ def main():
                                                        local_feature=local_feature_source,
                                                        label=label)
 
-                global_loss_value += global_loss.data.cpu().numpy() / args.iter_size / 2
-                local_loss_value += local_loss.data.cpu().numpy() / args.iter_size / 2
+                global_loss_value += global_loss.data.cpu().numpy() / args.iter_size / 2.0
+                local_loss_value += local_loss.data.cpu().numpy() / args.iter_size / 2.0
 
                 loss += args.w_global * global_loss
                 loss += args.w_local * local_loss
@@ -323,7 +321,7 @@ def main():
 
             if args.rec_loss:
                 rec_loss = loss_rec(pred=rec_source, gt=rec_image, use_cuda=use_cuda)
-                rec_loss_value += rec_loss.data.cpu().numpy() / args.iter_size / 2
+                rec_loss_value += rec_loss.data.cpu().numpy() / args.iter_size / 2.0
                 loss += args.w_rec * rec_loss
 
             loss = loss / args.iter_size
@@ -465,9 +463,15 @@ def main():
             print('Start evaluation...')
  
             model.eval()
-            rank1 = eval_metric(args, model, test_loader, query_loader)
+            #rank1 = eval_metric(args, model, test_loader, query_loader)
+            mAP, cmc, _, _ = eval_metric(args, model, test_loader, query_loader, re_rank=False)
+            rank1, rank5, rank10, rank20 = cmc[[0,4,9,19]]
             
             writer.add_scalar('Rank 1', rank1, (step+1)/args.eval_steps)
+            writer.add_scalar('Rank 5', rank5, (step+1)/args.eval_steps)
+            writer.add_scalar('Rank 10', rank10, (step+1)/args.eval_steps)
+            writer.add_scalar('Rank 20', rank20, (step+1)/args.eval_steps)
+            writer.add_scalar('mAP', mAP, (step+1)/args.eval_steps)
 
             if rank1 >= best_rank1:
                 best_rank1 = rank1
@@ -475,7 +479,9 @@ def main():
                 save_model(model, D_1)
                 writer.add_scalar('Best Rank 1', best_rank1, (step+1)/args.eval_steps)
 
-            print('rank 1:', rank1, 'best:', best_rank1)
+            print('Rank:', rank1, rank5, rank10, rank20)
+            print('mAP:', mAP)
+            print('Best rank1:', best_rank1)
 
 
 if __name__ == '__main__':

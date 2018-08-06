@@ -15,12 +15,14 @@ class ArgumentParser():
         
     def add_base_parameters(self):
         base_params = self.parser.add_argument_group('base')
-        base_params.add_argument('--model-dir', type=str, default='', help='Directory for saving trained models')
+        base_params.add_argument('--model-dir', type=str, default='trained_models', help='Directory for saving trained models')
         base_params.add_argument('--model-path', type=str, default='', help='Pre-trained model path')
         base_params.add_argument('--extractor-path', type=str, default='', help='Pre-trained extractor path')
         base_params.add_argument('--decoder-path', type=str, default='', help='Pre-trained decoder path')
         base_params.add_argument('--classifier-path', type=str, default='', help='Pre-trained classifier path')
         base_params.add_argument('--discriminator-path', type=str, default='', help='Pre-trained discriminator path')
+        base_params.add_argument('--D1-path', type=str, default='', help='Pre-trained discriminator path')
+        base_params.add_argument('--D2-path', type=str, default='', help='Pre-trained discriminator path')
         base_params.add_argument('--backbone', type=str, default='resnet-101', help='Backbone for feature extractor')                
         base_params.add_argument('--gpu', type=int, default=0, help='Which GPU to use?')
         base_params.add_argument('--num-workers', type=int, default=4, help='Number of workers')
@@ -57,7 +59,7 @@ class ArgumentParser():
         train_params.add_argument('--w-local', type=float, default=0, help='weight for local triplet loss')
         train_params.add_argument('--eval-metric', type=str, default='rank', help='Eval metric rank/mAP')                
         train_params.add_argument('--dist-metric', type=str, default='L2', help='Retrieval distance metric') 
-        train_params.add_argument('--rank', type=int, default=1, help='Rank')                
+        train_params.add_argument('--rank', type=int, default=20, help='Rank')                
 
 
     def add_eval_parameters(self):
