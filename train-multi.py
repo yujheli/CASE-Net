@@ -155,7 +155,7 @@ def main():
 
 
     if not os.path.exists(args.model_dir):
-        os.makediys(args.model_dir)
+        os.makedirs(args.model_dir)
 
 
     """ Initialize Source Data and Target Data """
