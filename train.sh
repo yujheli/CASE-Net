@@ -2,22 +2,26 @@ rm -rf runs
 
 MODEL_DIR=trained_models
 NUM_WORKERS=2
-GPU=1
+GPU=0
 
-BATCH_SIZE=12
+BATCH_SIZE=8
 LEARNING_RATE=0.001
 MOMENTUM=0.9
 WEIGHT_DECAY=0.0005
 
 NUM_STEPS=250000
 ITER_SIZE=1
-EVAL_STEPS=100
+EVAL_STEPS=1000
 IMAGE_STEPS=1000
 
-SOURCE_DATASET=CUHK
-TARGET_DATASET=CUHK
+#SOURCE_DATASET=CUHK
+#TARGET_DATASET=CUHK
+SOURCE_DATASET=VIPER
+TARGET_DATASET=VIPER
+#SOURCE_DATASET=CAVIAR
+#TARGET_DATASET=CAVIAR
 
-PRETRAINED_DIR=/home/dlcv_ta/Project/ycchen/pretrained/$SOURCE_DATASET/down_1_4
+PRETRAINED_DIR=/home/yujheli/Project/ycchen/pretrained/$SOURCE_DATASET/down_1_8
 DECODER_PATH=$PRETRAINED_DIR/Decoder_${SOURCE_DATASET}.pth.tar
 EXTRACTOR_PATH=$PRETRAINED_DIR/Extractor_${SOURCE_DATASET}.pth.tar
 CLASSIFIER_PATH=$PRETRAINED_DIR/Classifier_${SOURCE_DATASET}.pth.tar
@@ -38,7 +42,7 @@ W_DIS=0.01
 W_GLOBAL=10.0
 W_LOCAL=5.0
 
-python2 train.py --model-dir $MODEL_DIR \
+python3 train.py --model-dir $MODEL_DIR \
                  --num-workers $NUM_WORKERS \
                  --source-dataset $SOURCE_DATASET \
                  --target-dataset $TARGET_DATASET \
@@ -62,7 +66,7 @@ python2 train.py --model-dir $MODEL_DIR \
                  --w-dis $W_DIS \
                  --w-global $W_GLOBAL \
                  --w-local $W_LOCAL \
-                 --extractor-path $EXTRACTOR_PATH \
-                 --classifier-path $CLASSIFIER_PATH \
-                 --decoder-path $DECODER_PATH \
+                 #--extractor-path $EXTRACTOR_PATH \
+                 #--classifier-path $CLASSIFIER_PATH \
+                 #--decoder-path $DECODER_PATH \
                  #--discriminator-path $DISCRIMINATOR_PATH

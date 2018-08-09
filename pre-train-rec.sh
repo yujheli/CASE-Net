@@ -17,7 +17,7 @@ IMAGE_STEPS=1000
 SOURCE_DATASET=CUHK
 TARGET_DATASET=CUHK
 
-PRETRAINED_DIR=/home/dlcv_ta/Project/ycchen/pretrained/$SOURCE_DATASET/down_1_4
+PRETRAINED_DIR=/home/yujheli/Project/ycchen/pretrained/$SOURCE_DATASET/down_1_8
 DECODER_PATH=$PRETRAINED_DIR/Decoder_${SOURCE_DATASET}.pth.tar
 EXTRACTOR_PATH=$PRETRAINED_DIR/Extractor_${SOURCE_DATASET}.pth.tar
 CLASSIFIER_PATH=$PRETRAINED_DIR/Classifier_${SOURCE_DATASET}.pth.tar
@@ -38,7 +38,7 @@ W_DIS=0.01
 W_GLOBAL=10.0
 W_LOCAL=5.0
 
-python3 pre-train-cls.py --model-dir $MODEL_DIR \
+python3 pre-train-rec.py --model-dir $MODEL_DIR \
                          --num-workers $NUM_WORKERS \
                          --source-dataset $SOURCE_DATASET \
                          --target-dataset $TARGET_DATASET \

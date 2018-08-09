@@ -177,13 +177,22 @@ def main():
     best_rank1 = 0
 
 
+    """ Fix Extractor """
+    for param in model.extractor.parameters():
+        param.requires_grad = False
+
+    """ Fix Classifier """
+    for param in model.classifier.parameters():
+        param.requires_grad = False
+
+
     """ Starts Training """
     for step in range(args.num_steps):
  
         model.train()
 
         rec_loss_value = 0
- 
+
         model_opt.zero_grad()
 
         for idx in range(args.iter_size):
@@ -260,14 +269,12 @@ def main():
 
         model_opt.step()
 
-
         print('[{0:6d}/{1:6d}] rec: {2:.6f}'.format(step+1, 
               args.num_steps, 
               rec_loss_value)) 
         
         """ Write Scalar """
         writer.add_scalar('Reconstruction Loss', rec_loss_value, step+1)
-
         
         if (step+1) % args.eval_steps == 0:
             print('Start evaluation...')

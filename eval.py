@@ -14,6 +14,8 @@ from data.duke import Duke
 from data.market import Market
 from data.msmt import MSMT
 from data.cuhk import CUHK
+from data.viper import VIPER
+from data.caviar import CAVIAR
 from parser.parser import ArgumentParser
 from util.eval_utils import eval_metric
 import config
@@ -39,6 +41,10 @@ def main():
         classifier_output_dim = config.MSMT_CLASS_NUM
     elif args.source_dataset == 'CUHK':
         classifier_output_dim = config.CUHK_CLASS_NUM
+    elif args.source_dataset == 'VIPER':
+        classifier_output_dim = config.VIPER_CLASS_NUM
+    elif args.source_dataset == 'CAVIAR':
+        classifier_output_dim = config.CAVIAR_CLASS_NUM
     
     model = AdaptReID(backbone='resnet-50',
                       use_cuda=use_cuda,
@@ -63,6 +69,12 @@ def main():
     elif args.target_dataset == 'CUHK':
         TestData = CUHK
         QueryData = CUHK
+    elif args.target_dataset == 'VIPER':
+        TestData = VIPER
+        QueryData = VIPER
+    elif args.target_dataset == 'CAVIAR':
+        TestData = CAVIAR
+        QueryData = CAVIAR
 
 
     test_data = TestData(mode='test',
