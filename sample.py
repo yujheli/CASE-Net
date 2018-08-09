@@ -18,6 +18,8 @@ if MODE == 'train':
     MARKET_CLASS_NUM = 751
     MSMT_CLASS_NUM = 1041
     CUHK_CLASS_NUM = 1367
+    VIPER_CLASS_NUM = 316
+    CAVIAR_CLASS_NUM = 47
 
 elif MODE == 'all':
     # ALL class number
@@ -25,6 +27,8 @@ elif MODE == 'all':
     MARKET_CLASS_NUM = 1501
     MSMT_CLASS_NUM = 4101
     CUHK_CLASS_NUM = 1467
+    VIPER_CLASS_NUM = 732
+    CAVIAR_CLASS_NUM = 72
 
 
 D1_INPUT_CHANNEL = 2048
@@ -45,6 +49,8 @@ MARKET_DATA_DIR = os.path.join(DATASET_DIR, 'Market')
 DUKE_DATA_DIR = os.path.join(DATASET_DIR, 'Duke')
 MSMT_DATA_DIR = os.path.join(DATASET_DIR, 'MSMT17_V1')
 CUHK_DATA_DIR = os.path.join(DATASET_DIR, 'CUHK03')
+VIPER_DATA_DIR = os.path.join(DATASET_DIR, 'VIPeR')
+CAVIAR_DATA_DIR = os.path.join(DATASET_DIR, 'Caviar')
 
 
 CSV_DIR = os.path.join(CURRENT_DIR, 'data/csv')
@@ -53,6 +59,8 @@ MARKET_CSV_DIR = os.path.join(CSV_DIR, 'Market')
 DUKE_CSV_DIR = os.path.join(CSV_DIR, 'Duke')
 MSMT_CSV_DIR = os.path.join(CSV_DIR, 'MSMT17_V1')
 CUHK_CSV_DIR = os.path.join(CSV_DIR, 'CUHK03')
+VIPER_CSV_DIR = os.path.join(CSV_DIR, 'VIPeR')
+CAVIAR_CSV_DIR = os.path.join(CSV_DIR, 'Caviar')
 
 if MODE == 'all':
     SOURCE_DATA_CSV = 'all_list.csv'
