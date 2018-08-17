@@ -1,3 +1,4 @@
+rm -rf runs
 MODEL_DIR=trained_models
 NUM_WORKERS=2
 GPU=1
@@ -9,16 +10,17 @@ WEIGHT_DECAY=0.0005
 
 NUM_STEPS=250000
 ITER_SIZE=1
-EVAL_STEPS=100
+EVAL_STEPS=500
 IMAGE_STEPS=1000
 
 SOURCE_DATASET=CUHK
 TARGET_DATASET=CUHK
 
-PRETRAINED_DIR=/home/yujheli/Project/ycchen/pretrained/$SOURCE_DATASET
+PRETRAINED_DIR=trained_models
+#PRETRAINED_DIR=/home/yujheli/Project/ycchen/pretrained/$SOURCE_DATASET
 DECODER_PATH=$PRETRAINED_DIR/Decoder_${SOURCE_DATASET}.pth.tar
-EXTRACTOR_PATH=/home/yujheli/Project/ycchen/pretrained/Market/Extractor_Market_pretrain.pth.tar
-#EXTRACTOR_PATH=$PRETRAINED_DIR/Extractor_${SOURCE_DATASET}.pth.tar
+#EXTRACTOR_PATH=/home/yujheli/Project/ycchen/pretrained/Market/Extractor_Market_pretrain.pth.tar
+EXTRACTOR_PATH=$PRETRAINED_DIR/Extractor_${SOURCE_DATASET}.pth.tar
 CLASSIFIER_PATH=$PRETRAINED_DIR/Classifier_${SOURCE_DATASET}.pth.tar
 DISCRIMINATOR_PATH=$PRETRAINED_DIR/Discriminator_${SOURCE_DATASET}.pth.tar
 
@@ -26,8 +28,8 @@ RANDOM_CROP=False
 
 REC_LOSS=True
 CLS_LOSS=True
-ADV_LOSS=False
-DIS_LOSS=False
+ADV_LOSS=True
+DIS_LOSS=True
 TRIPLET_LOSS=True
 
 W_REC=1.0
@@ -61,7 +63,7 @@ python3 train_semi.py --model-dir $MODEL_DIR \
                  --w-dis $W_DIS \
                  --w-global $W_GLOBAL \
                  --w-local $W_LOCAL \
-                 #--extractor-path $EXTRACTOR_PATH \
-                 #--classifier-path $CLASSIFIER_PATH \
+                 --extractor-path $EXTRACTOR_PATH \
+                 --classifier-path $CLASSIFIER_PATH \
                  #--decoder-path $DECODER_PATH \
                  #--discriminator-path $DISCRIMINATOR_PATH
