@@ -338,7 +338,7 @@ def main():
             rec_image = batch['rec_image'].cuda(args.gpu).view(-1, 3, config.IMAGE_HEIGHT, config.IMAGE_WIDTH)
 
 
-            latent_source, features_source, cls_source, rec_source, global_feature_source, local_feature_source = model(image) 
+            _, features_source, _, rec_source, _, _ = model(image) 
 
             extracted_source_low = features_source[-1]
 
@@ -350,8 +350,8 @@ def main():
                 rec_loss_value += rec_loss.data.cpu().numpy() / args.iter_size / 2.0
                 loss += args.w_rec * rec_loss
 
-            loss = loss / args.iter_size
-            loss.backward()
+                loss = loss / args.iter_size
+                loss.backward()
             
  
             """ Write Images """
@@ -376,7 +376,7 @@ def main():
             rec_image = batch['rec_image'].cuda(args.gpu).view(-1, 3, config.IMAGE_HEIGHT, config.IMAGE_WIDTH)
 
 
-            latent_target, features_target, cls_target, rec_target, global_feature_target, local_feature_target = model(image)
+            _, features_target, _, rec_target, _, _ = model(image)
 
             extracted_target_low = features_target[-1]
 
@@ -386,18 +386,20 @@ def main():
 
             loss = 0
 
-            if args.rec_loss:
-                rec_loss = loss_rec(pred=rec_target, gt=rec_image, use_cuda=use_cuda)
-                rec_loss_value += rec_loss.data.cpu().numpy() / args.iter_size / 2.0
-                loss += args.w_rec * rec_loss
+
 
             if args.adv_loss:
                 D1_adv_loss = loss_adv(pred=D1_output, gt=D1_tensor)
                 D1_adv_loss_value += D1_adv_loss.data.cpu().numpy() / args.iter_size
                 loss += args.w_adv * D1_adv_loss
 
-            loss = loss / args.iter_size
-            loss.backward()
+            if args.rec_loss:
+                rec_loss = loss_rec(pred=rec_target, gt=rec_image, use_cuda=use_cuda)
+                rec_loss_value += rec_loss.data.cpu().numpy() / args.iter_size / 2.0
+                loss += args.w_rec * rec_loss
+
+                loss = loss / args.iter_size
+                loss.backward()
             
 
             """ Write Images """
@@ -423,21 +425,21 @@ def main():
             rec_image = batch['rec_image'].cuda(args.gpu).view(-1, 3, config.IMAGE_HEIGHT, config.IMAGE_WIDTH)
 
 
-            latent_source, features_source, cls_source, rec_source, global_feature_source, local_feature_source = model(image) 
+            _, _, cls_semi, _, global_feature_semi, local_feature_semi = model(image) 
 
-            extracted_source_low = features_source[-1]
+#             extracted_source_low = features_source[-1]
 
             loss = 0
 
             if args.cls_loss:
-                cls_loss = loss_cls(pred=cls_source, gt=label, use_cuda=use_cuda)
+                cls_loss = loss_cls(pred=cls_semi, gt=label, use_cuda=use_cuda)
                 cls_loss_value += cls_loss.data.cpu().numpy() / args.iter_size
                 loss += args.w_cls * cls_loss
  
  
             if args.triplet_loss:
-                global_loss, local_loss = loss_triplet(global_feature=global_feature_source,
-                                                       local_feature=local_feature_source,
+                global_loss, local_loss = loss_triplet(global_feature=global_feature_semi,
+                                                       local_feature=local_feature_semi,
                                                        label=label)
 
                 global_loss_value += global_loss.data.cpu().numpy() / args.iter_size
