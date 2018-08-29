@@ -70,3 +70,4 @@ elif MODE == 'train':
 TRAIN_DATA_CSV = 'train_list_2.csv'
 QUERY_DATA_CSV = 'query_list.csv'
 TEST_DATA_CSV = 'test_list.csv'
+SEMI_DATA_CSV = 'train_list_20p.csv'

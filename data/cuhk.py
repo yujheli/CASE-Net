@@ -115,13 +115,16 @@ class CUHK(Dataset):
 
             database = {'image': input_image_list} 
 
-            if self.mode == 'source':
-                database['label'] = label
-                database['rec_image'] = input_rec_list #rec_image
+#             if self.mode == 'source':
+#                 database['label'] = label
+#                 database['rec_image'] = input_rec_list #rec_image
 
-            elif self.mode == 'train':
-                database['label'] = label
-                database['rec_image'] = input_rec_list #rec_image
+#             elif self.mode == 'train':
+#                 database['label'] = label
+#                 database['rec_image'] = input_rec_list #rec_image
+                
+            database['label'] = label
+            database['rec_image'] = input_rec_list #rec_image
 
             return database
 
@@ -130,6 +133,8 @@ class CUHK(Dataset):
             csv_path = os.path.join(self.csv_path, config.SOURCE_DATA_CSV)
         elif mode == 'train':
             csv_path = os.path.join(self.csv_path, config.TRAIN_DATA_CSV)
+        elif mode == 'semi':
+            csv_path = os.path.join(self.csv_path, config.SEMI_DATA_CSV)
         elif mode == 'test':
             csv_path = os.path.join(self.csv_path, config.TEST_DATA_CSV)
         else: # query
@@ -150,7 +155,7 @@ class CUHK(Dataset):
             right = int(7*w/8+np.random.randint(w/8))
             image = image[top:bottom, left:right, :]
  
-        if self.mode == 'train' or self.mode == 'source':
+        if self.mode == 'train' or self.mode == 'source' or self.mode == 'semi':
             """ Flip Image """
             if random.random() > 0.5:
                 image = np.flip(image, 1) 
