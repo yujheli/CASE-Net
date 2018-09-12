@@ -73,7 +73,7 @@ def cmc(
         if not np.any(matches[i, valid]): continue
         is_valid_query[i] = 1
         if single_gallery_shot:
-            repeat = 100
+            repeat = 10
             gids = gallery_ids[indices[i][valid]]
             inds = np.where(valid)[0]
             ids_dict = defaultdict(list)

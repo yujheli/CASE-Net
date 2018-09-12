@@ -46,6 +46,9 @@ class Classifier(nn.Module):
         data = data.view(data.size()[0],-1)
         out = self.linear(data)
         return out
+    
+    
+
 
 class Decoder(nn.Module):
     def __init__(self,
@@ -136,6 +139,10 @@ class Decoder(nn.Module):
             block5 = self.block5(block4)
             return block5
 
+  
+        
+        
+        
 class AdaptReID(nn.Module):
     def __init__(self,
                  backbone='resnet-101',
@@ -143,7 +150,8 @@ class AdaptReID(nn.Module):
                  classifier_input_dim=2048,
                  classifier_output_dim=config.DUKE_CLASS_NUM,
                  use_cuda=True,
-                 local_conv_out_channels=128):
+                 local_conv_out_channels=128,
+                 ):
         super(AdaptReID, self).__init__()
 
         self.extractor = Extractor(backbone=backbone)
@@ -193,7 +201,240 @@ class AdaptReID(nn.Module):
 
         return latent_feature, features, cls_vector, reconstruct, global_feat, local_feat
 
+# class Encode_Mean_Logvar(nn.Module):
+#     def __init__(self, input_channel = 2048, output_channel = 4096):
+#         super(Encode_Mean_Logvar, self).__init__()
+#         self.enc_mu = nn.Conv2d(input_channel, output_channel, kernel_size=3, stride=2,padding=1)
+#         self.enc_logvar = nn.Conv2d(input_channel, output_channel, kernel_size=3, stride=2,padding=1)
+        
+#     def forward(self, data):
+#         mu = self.enc_mu(data)
+#         logvar = self.enc_logvar(data)
+
+#         return mu, logvar
+    
+class VAE_Decoder(nn.Module):
+    def __init__(self,
+                 backbone='resnet-101', input_dim=4096, code_dim=750):
+        super(VAE_Decoder, self).__init__()
+
+#         self.skip_connection = skip_connection
+        self.input_dim = input_dim
+        self.code_dim = code_dim
+
+        if backbone == 'resnet-50' or backbone == 'resnet-101':
+            channel_list = [2048, 1024, 512, 256, 64, 3]
+            
+        self.block0 = nn.Sequential(
+            nn.ConvTranspose2d(self.input_dim+self.code_dim, channel_list[0], kernel_size=3, stride=2, padding=1, output_padding=1),
+            nn.BatchNorm2d(channel_list[0]),
+            nn.LeakyReLU(negative_slope=0.2, inplace=True),
+#             nn.Conv2d(channel_list[0], channel_list[1], kernel_size=3, padding=1),
+#             nn.BatchNorm2d(channel_list[1]),
+#             nn.LeakyReLU(negative_slope=0.2, inplace=True),
+#             nn.Conv2d(channel_list[0], channel_list[1], kernel_size=3, padding=1),
+#             nn.BatchNorm2d(channel_list[1]),
+#             nn.LeakyReLU(negative_slope=0.2, inplace=True)
+        )
+            
+        self.block1 = nn.Sequential(
+            nn.ConvTranspose2d(channel_list[0], channel_list[1], kernel_size=3, stride=2, padding=1, output_padding=1),
+            nn.BatchNorm2d(channel_list[1]),
+            nn.LeakyReLU(negative_slope=0.2, inplace=True),
+            nn.Conv2d(channel_list[1], channel_list[1], kernel_size=3, padding=1),
+            nn.BatchNorm2d(channel_list[1]),
+            nn.LeakyReLU(negative_slope=0.2, inplace=True),
+            nn.Conv2d(channel_list[1], channel_list[1], kernel_size=3, padding=1),
+            nn.BatchNorm2d(channel_list[1]),
+            nn.LeakyReLU(negative_slope=0.2, inplace=True)
+        )
+
+        self.block2 = nn.Sequential(
+            nn.ConvTranspose2d(channel_list[1], channel_list[2], kernel_size=3, stride=2, padding=1, output_padding=1),
+            nn.BatchNorm2d(channel_list[2]),
+            nn.LeakyReLU(negative_slope=0.2, inplace=True),
+            nn.Conv2d(channel_list[2], channel_list[2], kernel_size=3, padding=1),
+            nn.BatchNorm2d(channel_list[2]),
+            nn.LeakyReLU(negative_slope=0.2, inplace=True),
+            nn.Conv2d(channel_list[2], channel_list[2], kernel_size=3, padding=1),
+            nn.BatchNorm2d(channel_list[2]),
+            nn.LeakyReLU(negative_slope=0.2, inplace=True)
+        )
+
+        self.block3 = nn.Sequential(
+            nn.ConvTranspose2d(channel_list[2], channel_list[3], kernel_size=3, stride=2, padding=1, output_padding=1),
+            nn.BatchNorm2d(channel_list[3]),
+            nn.LeakyReLU(negative_slope=0.2, inplace=True),
+            nn.Conv2d(channel_list[3], channel_list[3], kernel_size=3, padding=1),
+            nn.BatchNorm2d(channel_list[3]),
+            nn.LeakyReLU(negative_slope=0.2, inplace=True),
+            nn.Conv2d(channel_list[3], channel_list[3], kernel_size=3, padding=1),
+            nn.BatchNorm2d(channel_list[3]),
+            nn.LeakyReLU(negative_slope=0.2, inplace=True)
+        )
+
+        self.block4 = nn.Sequential(
+            nn.ConvTranspose2d(channel_list[3], channel_list[4], kernel_size=3, stride=2, padding=1, output_padding=1),
+            nn.BatchNorm2d(channel_list[4]),
+            nn.LeakyReLU(negative_slope=0.2, inplace=True),
+            nn.Conv2d(channel_list[4], channel_list[4], kernel_size=3, padding=1),
+            nn.BatchNorm2d(channel_list[4]),
+            nn.LeakyReLU(negative_slope=0.2, inplace=True),
+            nn.Conv2d(channel_list[4], channel_list[4], kernel_size=3, padding=1),
+            nn.BatchNorm2d(channel_list[4]),
+            nn.LeakyReLU(negative_slope=0.2, inplace=True)
+        )
+
+        self.block5 = nn.Sequential(
+            nn.ConvTranspose2d(channel_list[4], channel_list[5], kernel_size=3, stride=2, padding=1, output_padding=1),
+            nn.BatchNorm2d(channel_list[5]),
+            nn.LeakyReLU(negative_slope=0.2, inplace=True),
+            nn.Conv2d(channel_list[5], channel_list[5], kernel_size=3, padding=1),
+            nn.BatchNorm2d(channel_list[5]),
+            nn.LeakyReLU(negative_slope=0.2, inplace=True),
+            nn.Conv2d(channel_list[5], channel_list[5], kernel_size=3, padding=1),
+            nn.BatchNorm2d(channel_list[5]),
+            nn.Tanh()
+        )
+
+    def forward(self, data):
+       
+        block0 = self.block0(data)
+        block1 = self.block1(block0)
+        block2 = self.block2(block1)
+        block3 = self.block3(block2)
+        block4 = self.block4(block3)
+        block5 = self.block5(block4)
+        return block5      
+    
+    
+class AdaptVAEReID(nn.Module):
+    def __init__(self,
+                 backbone='resnet-101',
+                 skip_connection=config.SKIP_CONNECTION,
+                 classifier_input_dim=2048,
+                 classifier_output_dim=config.DUKE_CLASS_NUM,
+                 use_cuda=True,
+                 local_conv_out_channels=128,mu_dim=4096, code_dim=config.DUKE_CLASS_NUM):
+        super(AdaptVAEReID, self).__init__()
+
+        self.extractor = Extractor(backbone=backbone)
+        
+        self.code_dim = code_dim
+        self.mu_dim = mu_dim
+        self.enc_mu = nn.Conv2d(classifier_input_dim, self.mu_dim, kernel_size=4, stride=2,padding=1)
+        self.enc_logvar = nn.Conv2d(classifier_input_dim, self.mu_dim, kernel_size=4, stride=2,padding=1)
+#         self.encode_mean_logvar =Encode_Mean_Logvar()
+
+        self.decoder = VAE_Decoder(backbone=backbone, code_dim=self.code_dim)
+
+        self.classifier = Classifier(input_dim=classifier_input_dim,
+                                     output_dim=classifier_output_dim)
+
+        self.skip_connection = skip_connection
+
+        self.avgpool = nn.AvgPool2d((8,4))
+        
+        #local feature
+        self.local_conv = nn.Conv2d(classifier_input_dim, local_conv_out_channels, 1)
+        self.local_bn = nn.BatchNorm2d(local_conv_out_channels)
+        self.local_relu = nn.ReLU(inplace=True)
+
+        if use_cuda:
+            self.extractor = self.extractor.cuda()
+            self.decoder = self.decoder.cuda()
+            self.classifier = self.classifier.cuda()
+            self.local_conv = self.local_conv.cuda()
+            self.local_bn = self.local_bn.cuda()
+            self.local_relu = self.local_relu.cuda()
+            self.enc_mu = self.enc_mu.cuda()
+            self.enc_logvar = self.enc_logvar.cuda()
+#             self.encode_mean_logvar = self.encode_mean_logvar.cuda()
+            self.enc_mu = self.enc_mu
+            self.enc_logvar = self.enc_logvar
+            
+    
+    def decode(self, z, insert_attrs = None):
+        
+        if len(z.size()) != 4:
+            z = z.view(z.size()[0],self.mu_dim,4,2)
+
+        if insert_attrs is not None:
+            if len(z.size()) == 2:
+                z = torch.cat([z,insert_attrs],dim=1)
+            else:
+                H,W = z.size()[2], z.size()[3]
+                z = torch.cat([z,insert_attrs.unsqueeze(-1).unsqueeze(-1).repeat(1,1,H,W)],dim=1)
+#                 print(z.size())
+        reconstruct = self.decoder(data=z)
+       
+        return reconstruct
+    
+    def encode(self, x):
+#         for l in range(len(self.enc_layers)-1):
+#             if (self.enc_layers[l] == 'fc')  and (len(x.size())>2):
+#                 batch_size = x.size()[0]
+#                 x = x.view(batch_size,-1)
+#             x = getattr(self, 'enc_'+str(l))(x)
+
+#         if (self.enc_layers[-1] == 'fc')  and (len(x.size())>2):
+#             batch_size = x.size()[0]
+#             x = x.view(batch_size,-1)
+        features = self.extractor(data=x)
+        extracted_feature = features[-1]
+        mu = self.enc_mu(extracted_feature)
+        logvar = self.enc_logvar(extracted_feature)
+#         mu, logvar =  self.encode_mean_logvar(extracted_feature)
+
+        return mu, logvar
+    
+    def reparameterize(self, mu, logvar):
+        if self.training:
+            std = logvar.mul(0.5).exp_()
+            eps = Variable(std.data.new(std.size()).normal_())
+            return eps.mul(std).add_(mu)
+        else:
+            return mu
+    
  
+    def forward(self, data, insert_attrs = None, return_enc = False):
+
+        features = self.extractor(data=data)
+
+        extracted_feature = features[-1]
+        
+#         mu, logvar =  self.encode_mean_logvar(extracted_feature)
+        mu = self.enc_mu(extracted_feature)
+        logvar = self.enc_logvar(extracted_feature)
+
+        latent_feature = self.avgpool(extracted_feature)
+
+        cls_vector = self.classifier(data=latent_feature)
+        
+        
+        
+        if len(mu.size()) > 2:
+            mu = mu.view(mu.size()[0],-1)
+            logvar = logvar.view(mu.size()[0],-1)
+        z = self.reparameterize(mu, logvar)
+
+#         reconstruct = self.decoder(features=features)
+        reconstruct = self.decode(z, cls_vector)
+#         reconstruct = self.decode(z, insert_attrs)
+
+        
+        # shape [N, C]
+        global_feat = latent_feature.view(latent_feature.size(0), -1)
+        # shape [N, C, H, 1]
+        local_feat = torch.mean(extracted_feature, -1, keepdim=True)
+        local_feat = self.local_relu(self.local_bn(self.local_conv(local_feat)))
+        # shape [N, H, c]
+        local_feat = local_feat.squeeze(-1).permute(0, 2, 1)
+
+        return latent_feature, features, cls_vector, reconstruct, global_feat, local_feat, mu, logvar
+    
+    
+    
 if __name__ == '__main__':
     data = Variable(torch.rand(4,3,256,128)).cuda()
     

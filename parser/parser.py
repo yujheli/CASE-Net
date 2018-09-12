@@ -23,6 +23,7 @@ class ArgumentParser():
         base_params.add_argument('--discriminator-path', type=str, default='', help='Pre-trained discriminator path')
         base_params.add_argument('--D1-path', type=str, default='', help='Pre-trained discriminator path')
         base_params.add_argument('--D2-path', type=str, default='', help='Pre-trained discriminator path')
+        base_params.add_argument('--acgan-path', type=str, default='', help='Pre-trained ACGAN discriminator path')
         base_params.add_argument('--backbone', type=str, default='resnet-101', help='Backbone for feature extractor')                
         base_params.add_argument('--gpu', type=int, default=0, help='Which GPU to use?')
         base_params.add_argument('--num-workers', type=int, default=4, help='Number of workers')
