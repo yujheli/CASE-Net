@@ -201,17 +201,17 @@ class AdaptReID(nn.Module):
 
         return latent_feature, features, cls_vector, reconstruct, global_feat, local_feat
 
-# class Encode_Mean_Logvar(nn.Module):
-#     def __init__(self, input_channel = 2048, output_channel = 4096):
-#         super(Encode_Mean_Logvar, self).__init__()
-#         self.enc_mu = nn.Conv2d(input_channel, output_channel, kernel_size=3, stride=2,padding=1)
-#         self.enc_logvar = nn.Conv2d(input_channel, output_channel, kernel_size=3, stride=2,padding=1)
+class Encode_Mean_Logvar(nn.Module):
+    def __init__(self, input_channel = 2048, output_channel = 4096):
+        super(Encode_Mean_Logvar, self).__init__()
+        self.enc_mu = nn.Conv2d(input_channel, output_channel, kernel_size=3, stride=2,padding=1)
+        self.enc_logvar = nn.Conv2d(input_channel, output_channel, kernel_size=3, stride=2,padding=1)
         
-#     def forward(self, data):
-#         mu = self.enc_mu(data)
-#         logvar = self.enc_logvar(data)
+    def forward(self, data):
+        mu = self.enc_mu(data)
+        logvar = self.enc_logvar(data)
 
-#         return mu, logvar
+        return mu, logvar
     
 class VAE_Decoder(nn.Module):
     def __init__(self,
@@ -322,9 +322,10 @@ class AdaptVAEReID(nn.Module):
         
         self.code_dim = code_dim
         self.mu_dim = mu_dim
-        self.enc_mu = nn.Conv2d(classifier_input_dim, self.mu_dim, kernel_size=4, stride=2,padding=1)
-        self.enc_logvar = nn.Conv2d(classifier_input_dim, self.mu_dim, kernel_size=4, stride=2,padding=1)
-#         self.encode_mean_logvar =Encode_Mean_Logvar()
+        
+#         self.enc_mu = nn.Conv2d(classifier_input_dim, self.mu_dim, kernel_size=4, stride=2,padding=1)
+#         self.enc_logvar = nn.Conv2d(classifier_input_dim, self.mu_dim, kernel_size=4, stride=2,padding=1)
+        self.encode_mean_logvar = Encode_Mean_Logvar()
 
         self.decoder = VAE_Decoder(backbone=backbone, code_dim=self.code_dim)
 
@@ -347,11 +348,10 @@ class AdaptVAEReID(nn.Module):
             self.local_conv = self.local_conv.cuda()
             self.local_bn = self.local_bn.cuda()
             self.local_relu = self.local_relu.cuda()
-            self.enc_mu = self.enc_mu.cuda()
-            self.enc_logvar = self.enc_logvar.cuda()
-#             self.encode_mean_logvar = self.encode_mean_logvar.cuda()
-            self.enc_mu = self.enc_mu
-            self.enc_logvar = self.enc_logvar
+#             self.enc_mu = self.enc_mu.cuda()
+#             self.enc_logvar = self.enc_logvar.cuda()
+            self.encode_mean_logvar = self.encode_mean_logvar.cuda()
+            
             
     
     def decode(self, z, insert_attrs = None):
@@ -382,9 +382,12 @@ class AdaptVAEReID(nn.Module):
 #             x = x.view(batch_size,-1)
         features = self.extractor(data=x)
         extracted_feature = features[-1]
-        mu = self.enc_mu(extracted_feature)
-        logvar = self.enc_logvar(extracted_feature)
-#         mu, logvar =  self.encode_mean_logvar(extracted_feature)
+#         mu = self.enc_mu(extracted_feature)
+#         logvar = self.enc_logvar(extracted_feature)
+        mu, logvar =  self.encode_mean_logvar(extracted_feature)
+        if len(mu.size()) > 2:
+            mu = mu.view(mu.size()[0],-1)
+            logvar = logvar.view(mu.size()[0],-1)
 
         return mu, logvar
     
@@ -397,15 +400,15 @@ class AdaptVAEReID(nn.Module):
             return mu
     
  
-    def forward(self, data, insert_attrs = None, return_enc = False):
+    def forward(self, data, insert_attrs=None, return_enc=False):
 
         features = self.extractor(data=data)
 
         extracted_feature = features[-1]
         
-#         mu, logvar =  self.encode_mean_logvar(extracted_feature)
-        mu = self.enc_mu(extracted_feature)
-        logvar = self.enc_logvar(extracted_feature)
+        mu, logvar =  self.encode_mean_logvar(extracted_feature)
+#         mu = self.enc_mu(extracted_feature)
+#         logvar = self.enc_logvar(extracted_feature)
 
         latent_feature = self.avgpool(extracted_feature)
 
@@ -419,8 +422,11 @@ class AdaptVAEReID(nn.Module):
         z = self.reparameterize(mu, logvar)
 
 #         reconstruct = self.decoder(features=features)
-        reconstruct = self.decode(z, cls_vector)
-#         reconstruct = self.decode(z, insert_attrs)
+        if insert_attrs is not None:
+            reconstruct = self.decode(z, insert_attrs)    
+        else:
+            reconstruct = self.decode(z, cls_vector)
+            
 
         
         # shape [N, C]
