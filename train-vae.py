@@ -329,8 +329,8 @@ def main():
                 Args:
                     D_ACGAN_output: b x c x h x w (HR or LR)
             """
-#             D_ACGAN_adv_loss = loss_adv(pred=D_ACGAN_output, gt=D_ACGAN_tensor)
-            D_ACGAN_adv_loss = - D_ACGAN_output.mean()
+            D_ACGAN_adv_loss = loss_adv(pred=D_ACGAN_output, gt=D_ACGAN_tensor)
+#             D_ACGAN_adv_loss = - D_ACGAN_output.mean() #WGAN
             D_ACGAN_adv_loss_value += D_ACGAN_adv_loss.data.cpu().numpy() / args.iter_size
             loss += args.w_acgan_adv * D_ACGAN_adv_loss
 
@@ -407,9 +407,9 @@ def main():
                 Args:
                     D_ACGAN_output: b x c x h x w (HR or LR)
             """
-#             D_ACGAN_dis_loss = loss_adv(pred=D_ACGAN_output, gt=D_ACGAN_tensor)
-            D_ACGAN_dis_loss = D_ACGAN_output.mean() # WGAN
-            D_ACGAN_dis_loss_value += D_ACGAN_dis_loss.data.cpu().numpy() / args.iter_size
+            D_ACGAN_dis_loss = loss_adv(pred=D_ACGAN_output, gt=D_ACGAN_tensor)
+#             D_ACGAN_dis_loss = D_ACGAN_output.mean() # WGAN
+            D_ACGAN_dis_loss_value += D_ACGAN_dis_loss.data.cpu().numpy() / args.iter_size / 2.0
             loss += args.w_acgan_adv * D_ACGAN_dis_loss
         
         # For Real image
@@ -423,9 +423,9 @@ def main():
                 Args:
                     D_ACGAN_output: b x c x h x w (HR or LR)
             """
-#             D_ACGAN_dis_loss = loss_adv(pred=D_ACGAN_output, gt=D_ACGAN_tensor)
-            D_ACGAN_dis_loss = - D_ACGAN_output.mean() # WGAN
-            D_ACGAN_dis_loss_value += D_ACGAN_dis_loss.data.cpu().numpy() / args.iter_size
+            D_ACGAN_dis_loss = loss_adv(pred=D_ACGAN_output, gt=D_ACGAN_tensor)
+#             D_ACGAN_dis_loss = - D_ACGAN_output.mean() # WGAN
+            D_ACGAN_dis_loss_value += D_ACGAN_dis_loss.data.cpu().numpy() / args.iter_size / 2.0
             loss += args.w_acgan_adv * D_ACGAN_dis_loss
             
         if args.acgan_cls_loss:    
