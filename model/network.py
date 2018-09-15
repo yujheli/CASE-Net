@@ -293,18 +293,28 @@ class VAE_Decoder(nn.Module):
             nn.BatchNorm2d(channel_list[5]),
             nn.LeakyReLU(negative_slope=0.2, inplace=True),
             nn.Conv2d(channel_list[5], channel_list[5], kernel_size=3, padding=1),
-            nn.BatchNorm2d(channel_list[5]),
+#             nn.BatchNorm2d(channel_list[5]),
             nn.Tanh()
         )
 
-    def forward(self, data):
-       
-        block0 = self.block0(data)
-        block1 = self.block1(block0)
-        block2 = self.block2(block1)
-        block3 = self.block3(block2)
-        block4 = self.block4(block3)
-        block5 = self.block5(block4)
+    def forward(self, data, features=None):
+        
+        if features is not None:
+            f1, f2, f3, f4, f5 = features
+            block0 = self.block0(data)
+            block1 = self.block1(block0)
+            block2 = self.block2(block1+f4)
+            block3 = self.block3(block2)
+            block4 = self.block4(block3+f2)
+            block5 = self.block5(block4)
+        else:
+            block0 = self.block0(data)
+            block1 = self.block1(block0)
+            block2 = self.block2(block1)
+            block3 = self.block3(block2)
+            block4 = self.block4(block3)
+            block5 = self.block5(block4)
+        
         return block5      
     
     
@@ -354,7 +364,7 @@ class AdaptVAEReID(nn.Module):
             
             
     
-    def decode(self, z, insert_attrs = None):
+    def decode(self, z, insert_attrs = None, features=None):
         
         if len(z.size()) != 4:
             z = z.view(z.size()[0],self.mu_dim,4,2)
@@ -366,7 +376,7 @@ class AdaptVAEReID(nn.Module):
                 H,W = z.size()[2], z.size()[3]
                 z = torch.cat([z,insert_attrs.unsqueeze(-1).unsqueeze(-1).repeat(1,1,H,W)],dim=1)
 #                 print(z.size())
-        reconstruct = self.decoder(data=z)
+        reconstruct = self.decoder(data=z, features=features)
        
         return reconstruct
     
@@ -420,12 +430,13 @@ class AdaptVAEReID(nn.Module):
             mu = mu.view(mu.size()[0],-1)
             logvar = logvar.view(mu.size()[0],-1)
         z = self.reparameterize(mu, logvar)
+#         z = Variable(mu.data.new(mu.size()).normal_())
 
 #         reconstruct = self.decoder(features=features)
         if insert_attrs is not None:
-            reconstruct = self.decode(z, insert_attrs)    
+            reconstruct = self.decode(z, insert_attrs, features=features)    
         else:
-            reconstruct = self.decode(z, cls_vector)
+            reconstruct = self.decode(z, cls_vector, features=None)
             
 
         
