@@ -352,6 +352,7 @@ def main():
         D1_output = D_1(extracted_source_low)
         D1_tensor = Variable(torch.FloatTensor(D1_output.data.size()).fill_(config.HR_label)).cuda(args.gpu)
 
+        loss = 0
         if args.dis_loss:
             """
                 Discriminator Loss on Resolution-Invariant Feature
@@ -362,8 +363,8 @@ def main():
             D1_dis_loss = loss_adv(pred=D1_output, gt=D1_tensor) / args.iter_size / 2.0
             D1_dis_loss_value += D1_dis_loss.data.cpu().numpy()
 
-            loss = args.w_dis * D1_dis_loss
-            loss.backward()
+            loss += args.w_dis * D1_dis_loss
+            
 
         
         """ Train with Target Data """
@@ -382,10 +383,10 @@ def main():
             D1_dis_loss = loss_adv(pred=D1_output, gt=D1_tensor) / args.iter_size / 2.0
             D1_dis_loss_value += D1_dis_loss.data.cpu().numpy()
 
-            loss = args.w_dis * D1_dis_loss
-            loss.backward()
+            loss += args.w_dis * D1_dis_loss
             
-        
+        loss = loss / args.iter_size    
+        loss.backward()
 
         D1_opt.step()
         
@@ -395,9 +396,10 @@ def main():
             param.requires_grad = True
             
         D_ACGAN_opt.zero_grad()
+        loss = 0
         
         # For Fake image
-        D_ACGAN_output, _ = D_ACGAN(rec_target)
+        D_ACGAN_output, _ = D_ACGAN(rec_target.detach())
         D_ACGAN_tensor = Variable(torch.FloatTensor(D_ACGAN_output.data.size()).fill_(config.LR_label)).cuda(args.gpu)
 
         if args.acgan_adv_loss:
@@ -443,7 +445,8 @@ def main():
             
             
 
-        
+        loss = loss / args.iter_size    
+        loss.backward()
         D_ACGAN_opt.step()
         
         
