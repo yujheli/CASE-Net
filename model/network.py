@@ -328,7 +328,7 @@ class Res_Decoder(nn.Module):
         self.code_dim = code_dim
 
         if backbone == 'resnet-50' or backbone == 'resnet-101':
-            channel_list = [2048, 1024, 512, 256, 64, 3]
+            channel_list = [1024, 512, 256, 128, 64, 3]
             
         self.block0 = nn.Sequential(
             nn.ConvTranspose2d(self.input_dim+self.code_dim, channel_list[0], kernel_size=3, stride=2, padding=1, output_padding=1),
@@ -491,7 +491,7 @@ class AdaptVAEReID(nn.Module):
                  classifier_input_dim=2048,
                  classifier_output_dim=config.DUKE_CLASS_NUM,
                  use_cuda=True,
-                 local_conv_out_channels=128,mu_dim=4096, code_dim=config.DUKE_CLASS_NUM):
+                 local_conv_out_channels=128,mu_dim=2048, code_dim=config.DUKE_CLASS_NUM):
         super(AdaptVAEReID, self).__init__()
 
         self.extractor = Extractor(backbone=backbone)
@@ -501,9 +501,9 @@ class AdaptVAEReID(nn.Module):
         
 #         self.enc_mu = nn.Conv2d(classifier_input_dim, self.mu_dim, kernel_size=4, stride=2,padding=1)
 #         self.enc_logvar = nn.Conv2d(classifier_input_dim, self.mu_dim, kernel_size=4, stride=2,padding=1)
-        self.encode_mean_logvar = Encode_Mean_Logvar()
+        self.encode_mean_logvar = Encode_Mean_Logvar(input_channel = classifier_input_dim, output_channel = self.mu_dim)
 
-        self.decoder = Res_Decoder(backbone=backbone, code_dim=self.code_dim)
+        self.decoder = Res_Decoder(backbone=backbone, input_dim=self.mu_dim, code_dim=self.code_dim)
 
         self.classifier = Classifier(input_dim=classifier_input_dim,
                                      output_dim=classifier_output_dim)
