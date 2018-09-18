@@ -1,10 +1,10 @@
-# Adapt-ReID
-This repository contains codes for AAAI-18 unsupervised domain adaptation for person re-identification.
+# Var-HR-ReID
+This repository contains codes for CVPR-19 Variational HRCNN for person re-identification.
 
 ### Download the Dataset
 We prepare the dataset for Market1501, DukeMTMC, MSMT17, CUHK03, Caviar, Viper
 ``` 
-wget https://www.dropbox.com/s/b30wcqjb1hwy7o8/reid_dataset.zip
+wget https://www.dropbox.com/s/2vhployyys67vbd/reid_dataset.zip  
 ```
 
 
