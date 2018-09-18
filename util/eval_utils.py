@@ -133,7 +133,10 @@ def extract_feat(dataloader, model, normalize_feat):
         image = batch['image'].cuda()
         label = batch['label']
         camera_id = batch['camera_id']
-        _, _, _, _, global_feat, local_feat, _, _ = model(image)
+        #_, _, _, _, global_feat, local_feat, _, _ = model(image)
+        dic = model(image)
+        global_feat = dic['global_feature']
+        local_feat = dic['local_feature']
         
         
         global_feat = global_feat.data.cpu().numpy()

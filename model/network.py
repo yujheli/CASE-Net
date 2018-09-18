@@ -567,6 +567,7 @@ class AdaptVAEReID(nn.Module):
 
         return mu, logvar
     
+
     def reparameterize(self, mu, logvar):
         if self.training:
             std = logvar.mul(0.5).exp_()
@@ -614,7 +615,19 @@ class AdaptVAEReID(nn.Module):
         # shape [N, H, c]
         local_feat = local_feat.squeeze(-1).permute(0, 2, 1)
 
-        return latent_feature, features, cls_vector, reconstruct, global_feat, local_feat, mu, logvar
+        #return latent_feature, features, cls_vector, reconstruct, global_feat, local_feat, mu, logvar
+        #return {'latent_vector': latent_feature, 
+
+        resolution_feature = features[-1]
+
+        return {'latent_vector': latent_feature, 
+                'resolution_feature': resolution_feature, 
+                'cls_vector': cls_vector, 
+                'rec_image': reconstruct, 
+                'global_feature': global_feat, 
+                'local_feature': local_feat, 
+                'mu': mu, 
+                'logvar': logvar}
     
     
     

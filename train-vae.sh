@@ -82,9 +82,9 @@ python3 train-vae.py --model-dir $MODEL_DIR \
                      --w-global $W_GLOBAL \
                      --w-local $W_LOCAL \
                      --w-gp $W_GP \
-                     --extractor-path $EXTRACTOR_PATH \
-                     --decoder-path $DECODER_PATH \
-                     --classifier-path $CLASSIFIER_PATH \
-                     --acgan-path $ACGAN_PATH \
+                     #--extractor-path $EXTRACTOR_PATH \
+                     #--decoder-path $DECODER_PATH \
+                     #--classifier-path $CLASSIFIER_PATH \
+                     #--acgan-path $ACGAN_PATH \
                      #--var-path $VAR_PATH \
-                     --discriminator-path $DISCRIMINATOR_PATH
+                     #--discriminator-path $DISCRIMINATOR_PATH
