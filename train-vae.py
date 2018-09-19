@@ -111,13 +111,13 @@ def main():
     D_ACGAN_opt = init_D_optim(args, D_ACGAN)
 
 
-    """ Initialize writer """
+    """ Initialize Writer """
     writer = SummaryWriter()
 
     best_rank1 = 0
     
 
-    """ Starts Training """
+    """ Start Training """
     for step in range(args.num_steps):
  
         model.train()
@@ -177,7 +177,7 @@ def main():
                               logvar=source_dict['logvar'])
 
             KL_loss_value += kl_loss.data.cpu().numpy() / args.iter_size / 2.0
-            loss += kl_loss
+            loss += args.w_KL * kl_loss
 
 
         if args.cls_loss:
@@ -206,7 +206,7 @@ def main():
                                 gt=rec_image, 
                                 use_cuda=use_cuda)
 
-            rec_loss_value += rec_loss.data.cpu().numpy() / args.iter_size / 2.0
+            rec_loss_value += rec_loss.data.cpu().numpy() / args.iter_size
             loss += args.w_rec * rec_loss
 
         loss = loss / args.iter_size
@@ -246,20 +246,11 @@ def main():
 
         """ ACGAN Discriminator """
         D_ACGAN_output, cls_ACGAN = D_ACGAN(target_dict['rec_image'])
-        D_ACGAN_tensor = Variable(torch.FloatTensor(D_ACGAN_output.data.size()).fill_(config.HR_label)).cuda(args.gpu)
+        D_ACGAN_tensor = Variable(torch.FloatTensor(D_ACGAN_output.data.size()).fill_(config.REAL)).cuda(args.gpu)
 
 
         """ Target Training Loss """
         loss = 0
-
-        if args.rec_loss:
-            rec_loss = loss_rec(pred=target_dict['rec_image'], 
-                                gt=rec_image, 
-                                use_cuda=use_cuda)
-
-            rec_loss_value += rec_loss.data.cpu().numpy() / args.iter_size / 2.0
-            loss += args.w_rec * rec_loss
-
 
         if args.KL_loss:
             kl_loss = loss_KL(mu=target_dict['mu'], 
@@ -278,15 +269,6 @@ def main():
             loss += args.w_cls * cls_loss
 
 
-        if args.acgan_cls_loss:    
-            D_ACGAN_cls_loss = loss_cls(pred=cls_ACGAN, 
-                                        gt=label, 
-                                        use_cuda=use_cuda)
-
-            D_ACGAN_cls_loss_value += D_ACGAN_cls_loss.data.cpu().numpy() / args.iter_size / 2.0
-            loss += args.w_acgan_cls * D_ACGAN_cls_loss
-
-
         if args.triplet_loss:
             global_loss, local_loss = loss_triplet(global_feature=target_dict['global_feature'],
                                                    local_feature=target_dict['local_feature'],
@@ -302,15 +284,25 @@ def main():
         if args.adv_loss:
             D_resolution_adv_loss = loss_adv(pred=D_resolution_output, 
                                              gt=D_resolution_tensor)
-            D_resolution_adv_loss_value += D_resolution_adv_loss.data.cpu().numpy() / args.iter_size / 2.0
+
+            D_resolution_adv_loss_value += D_resolution_adv_loss.data.cpu().numpy() / args.iter_size
             loss += args.w_adv * D_resolution_adv_loss
 
 
-        if args.acgan_adv_loss:    
+        if args.acgan_cls_loss:
+            D_ACGAN_cls_loss = loss_cls(pred=cls_ACGAN, 
+                                        gt=label, 
+                                        use_cuda=use_cuda)
+
+            D_ACGAN_cls_loss_value += D_ACGAN_cls_loss.data.cpu().numpy() / args.iter_size / 2.0
+            loss += args.w_acgan_cls * D_ACGAN_cls_loss
+
+
+        if args.acgan_adv_loss: 
             D_ACGAN_adv_loss = loss_adv(pred=D_ACGAN_output, 
                                         gt=D_ACGAN_tensor)
 
-            D_ACGAN_adv_loss_value += D_ACGAN_adv_loss.data.cpu().numpy() / args.iter_size / 2.0
+            D_ACGAN_adv_loss_value += D_ACGAN_adv_loss.data.cpu().numpy() / args.iter_size
             loss += args.w_acgan_adv * D_ACGAN_adv_loss
 
         loss = loss / args.iter_size
@@ -322,6 +314,7 @@ def main():
         """ Train Resolution Discriminator """
         for param in D_resolution.parameters():
             param.requires_grad = True
+
         D_resolution_opt.zero_grad()
 
 
@@ -330,6 +323,7 @@ def main():
         D_resolution_tensor = Variable(torch.FloatTensor(D_resolution_output.data.size()).fill_(config.HR_label)).cuda(args.gpu)
 
         loss = 0
+
         if args.dis_loss:
             D_resolution_dis_loss = loss_adv(pred=D_resolution_output, 
                                              gt=D_resolution_tensor)
@@ -360,39 +354,49 @@ def main():
             param.requires_grad = True
             
         D_ACGAN_opt.zero_grad()
+        
         loss = 0
-        
-        """ For Fake Image """
-        D_ACGAN_output, _ = D_ACGAN(target_dict['rec_image'].detach())
-        D_ACGAN_tensor = Variable(torch.FloatTensor(D_ACGAN_output.data.size()).fill_(config.LR_label)).cuda(args.gpu)
 
-        if args.acgan_adv_loss:
-            D_ACGAN_dis_loss = loss_adv(pred=D_ACGAN_output, 
-                                        gt=D_ACGAN_tensor)
+        """ For Fake (Generated) Image """
+        D_ACGAN_output, cls_ACGAN = D_ACGAN(target_dict['rec_image'].detach())
+        D_ACGAN_tensor = Variable(torch.FloatTensor(D_ACGAN_output.data.size()).fill_(config.FAKE)).cuda(args.gpu)
 
-            D_ACGAN_dis_loss_value += D_ACGAN_dis_loss.data.cpu().numpy() / args.iter_size / 2.0
-            loss += args.w_acgan_adv * D_ACGAN_dis_loss
-        
-
-        """ For Real Image """
-        D_ACGAN_output, cls_ACGAN = D_ACGAN(rec_image)
-        D_ACGAN_tensor = Variable(torch.FloatTensor(D_ACGAN_output.data.size()).fill_(config.HR_label)).cuda(args.gpu)
-
-        if args.acgan_adv_loss:
-            D_ACGAN_dis_loss = loss_adv(pred=D_ACGAN_output, 
-                                        gt=D_ACGAN_tensor)
-
-            D_ACGAN_dis_loss_value += D_ACGAN_dis_loss.data.cpu().numpy() / args.iter_size / 2.0
-            loss += args.w_acgan_adv * D_ACGAN_dis_loss
-            
-
-        if args.acgan_cls_loss:    
+        if args.acgan_cls_loss: 
             D_ACGAN_cls_loss = loss_cls(pred=cls_ACGAN, 
                                         gt=label, 
                                         use_cuda=use_cuda)
 
             D_ACGAN_cls_loss_value += D_ACGAN_cls_loss.data.cpu().numpy() / args.iter_size / 2.0
             loss += args.w_acgan_cls * D_ACGAN_cls_loss
+
+
+        if args.acgan_dis_loss:
+            D_ACGAN_dis_loss = loss_adv(pred=D_ACGAN_output, 
+                                        gt=D_ACGAN_tensor)
+
+            D_ACGAN_dis_loss_value += D_ACGAN_dis_loss.data.cpu().numpy() / args.iter_size / 2.0
+            loss += args.w_acgan_dis * D_ACGAN_dis_loss
+        
+
+        """ For Real Image """
+        D_ACGAN_output, cls_ACGAN = D_ACGAN(rec_image)
+        D_ACGAN_tensor = Variable(torch.FloatTensor(D_ACGAN_output.data.size()).fill_(config.REAL)).cuda(args.gpu)
+
+        if args.acgan_cls_loss: 
+            D_ACGAN_cls_loss = loss_cls(pred=cls_ACGAN, 
+                                        gt=label, 
+                                        use_cuda=use_cuda)
+
+            D_ACGAN_cls_loss_value += D_ACGAN_cls_loss.data.cpu().numpy() / args.iter_size / 2.0
+            loss += args.w_acgan_cls * D_ACGAN_cls_loss
+
+
+        if args.acgan_dis_loss:
+            D_ACGAN_dis_loss = loss_adv(pred=D_ACGAN_output, 
+                                        gt=D_ACGAN_tensor)
+
+            D_ACGAN_dis_loss_value += D_ACGAN_dis_loss.data.cpu().numpy() / args.iter_size / 2.0
+            loss += args.w_acgan_dis * D_ACGAN_dis_loss
             
 
         if args.gp_loss:
@@ -402,9 +406,9 @@ def main():
             GP_loss_value = D_ACGAN_gp_loss.data.cpu().numpy() / args.iter_size
             loss += D_ACGAN_gp_loss * args.w_gp
             
-
         loss = loss / args.iter_size    
         loss.backward()
+
         D_ACGAN_opt.step()
         
         
@@ -413,14 +417,50 @@ def main():
             save_model(args, model, D_resolution, D_ACGAN=D_ACGAN) # To save model
             
             for i in range(len(target_dict['rec_image'])):
-                target_dict['rec_image'] = inv_normalize(target_dict['rec_image'])
+                target_dict['rec_image'][i] = inv_normalize(target_dict['rec_image'][i])
                 image[i] = inv_normalize(image[i])
 
             writer.add_image('LR image', make_grid(image, nrow=16), step+1)
             writer.add_image('Generated LR image', make_grid(target_dict['rec_image'], nrow=16), step+1)
 
 
-        print('[{0:6d}/{1:6d}] cls: {2:.6f} rec: {3:.6f} global: {4:.6f} local: {5:.6f} adv: {6:.6f} dis: {7:.6f}, AC adv: {8:6f}, AC dis: {9:6f}, AC cls: {10:6f}, KLD: {11:6f}, GP: {12:6f}'.format(step+1, 
+        print_string = '[{:6d}/{:6d}]'.format(step+1, args.num_steps)
+        
+        if args.cls_loss:
+            print_string += ' cls: {:.6f}'.format(cls_loss_value)
+
+        if args.rec_loss:
+            print_string += ' rec: {:.6f}'.format(rec_loss_value)
+
+        if args.triplet_loss:
+            print_string += ' global: {:.6f} local: {:.6f}'.format(global_loss_value, local_loss_value)
+
+        if args.adv_loss:
+            print_string += ' adv: {:.6f}'.format(D_resolution_adv_loss_value)
+
+        if args.dis_loss:
+            print_string += ' dis: {:.6f}'.format(D_resolution_dis_loss_value)
+
+        if args.acgan_adv_loss:
+            print_string += ' AC adv: {:.6f}'.format(D_ACGAN_adv_loss_value)
+
+        if args.acgan_dis_loss:
+            print_string += ' AC dis: {:.6f}'.format(D_ACGAN_dis_loss_value)
+
+        if args.acgan_cls_loss:
+            print_string += ' AC cls: {:.6f}'.format(D_ACGAN_cls_loss_value)
+
+        if args.KL_loss:
+            print_string += ' KL: {:.6f}'.format(KL_loss_value)
+
+        if args.gp_loss:
+            print_string += ' GP: {:.6f}'.format(GP_loss_value)
+
+
+        print(print_string)
+
+        '''
+        print('[{0:6d}/{1:6d}] cls: {2:.6f} rec: {3:.6f} global: {4:.6f} local: {5:.6f} adv: {6:.6f} dis: {7:.6f} AC adv: {8:6f} AC dis: {9:6f} AC cls: {10:6f} KLD: {11:6f} GP: {12:6f}'.format(step+1, 
               args.num_steps, 
               cls_loss_value, 
               rec_loss_value, 
@@ -433,6 +473,8 @@ def main():
               D_ACGAN_cls_loss_value,
               KL_loss_value,
               GP_loss_value))
+        '''
+
         
         """ Write Scalar """
         writer.add_scalar('Classification Loss', cls_loss_value, step+1)
