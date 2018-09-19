@@ -2,22 +2,22 @@ rm -rf runs
 
 MODEL_DIR=trained_models
 NUM_WORKERS=2
-GPU=1
+GPU=0
 
-BATCH_SIZE=4
+BATCH_SIZE=8
 LEARNING_RATE=0.001
 MOMENTUM=0.9
 WEIGHT_DECAY=0.0005
 
 NUM_STEPS=250000
 ITER_SIZE=1
-EVAL_STEPS=1000
-IMAGE_STEPS=1000
+EVAL_STEPS=5000
+IMAGE_STEPS=25
 
-SOURCE_DATASET=CUHK
-TARGET_DATASET=CUHK
+SOURCE_DATASET=Market
+TARGET_DATASET=Market
 
-PRETRAINED_DIR=/home/yujheli/Project/ycchen/pretrained/$SOURCE_DATASET/down_1_2/multi
+PRETRAINED_DIR=/home/yujheli/Project/ycchen/pretrained/$SOURCE_DATASET/
 PRETRAINED_DIR=trained_models
 DECODER_PATH=$PRETRAINED_DIR/Decoder_${SOURCE_DATASET}.pth.tar
 #EXTRACTOR_PATH=/home/yujheli/Project/ycchen/pretrained/Market/Extractor_Market_pretrain.pth.tar
@@ -30,14 +30,14 @@ DISCRIMINATOR_PATH=$PRETRAINED_DIR/D1_${SOURCE_DATASET}.pth.tar
 RANDOM_CROP=False
 
 REC_LOSS=True
-CLS_LOSS=False
-ADV_LOSS=True
-DIS_LOSS=True
+CLS_LOSS=True
+ADV_LOSS=False
+DIS_LOSS=False
 TRIPLET_LOSS=False
 ACGAN_CLS_LOSS=True
 ACGAN_ADV_LOSS=True
 KL_LOSS=True
-GP_LOSS=True
+GP_LOSS=False
 
 W_REC=10.0
 W_CLS=10.0
@@ -45,10 +45,10 @@ W_ADV=0.01
 W_DIS=0.01
 W_GLOBAL=10.0
 W_LOCAL=5.0
-W_ACGAN_CLS=10.0
-W_ACGAN_ADV=0.01
+W_ACGAN_CLS=1.0
+W_ACGAN_ADV=1.0
 W_KL=1
-W_GP=100
+W_GP=1
 
 python3 train-vae.py --model-dir $MODEL_DIR \
                      --num-workers $NUM_WORKERS \
@@ -83,8 +83,8 @@ python3 train-vae.py --model-dir $MODEL_DIR \
                      --w-local $W_LOCAL \
                      --w-gp $W_GP \
                      --extractor-path $EXTRACTOR_PATH \
-                     --decoder-path $DECODER_PATH \
                      --classifier-path $CLASSIFIER_PATH \
+                     --var-path $VAR_PATH \
+                     --discriminator-path $DISCRIMINATOR_PATH \
                      --acgan-path $ACGAN_PATH \
-                     #--var-path $VAR_PATH \
-                     --discriminator-path $DISCRIMINATOR_PATH
+                     --decoder-path $DECODER_PATH \

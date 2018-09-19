@@ -294,6 +294,7 @@ def main():
             D_ACGAN_cls_loss = loss_cls(pred=cls_ACGAN, gt=label, use_cuda=use_cuda)
             D_ACGAN_cls_loss_value += D_ACGAN_cls_loss.data.cpu().numpy() / args.iter_size / 2.0
             loss += args.w_acgan_cls * D_ACGAN_cls_loss
+            
 
 
         if args.triplet_loss:
@@ -329,8 +330,8 @@ def main():
                 Args:
                     D_ACGAN_output: b x c x h x w (HR or LR)
             """
-#             D_ACGAN_adv_loss = loss_adv(pred=D_ACGAN_output, gt=D_ACGAN_tensor)
-            D_ACGAN_adv_loss = - D_ACGAN_output.mean()
+            D_ACGAN_adv_loss = loss_adv(pred=D_ACGAN_output, gt=D_ACGAN_tensor)
+#             D_ACGAN_adv_loss = - D_ACGAN_output.mean() #WGAN
             D_ACGAN_adv_loss_value += D_ACGAN_adv_loss.data.cpu().numpy() / args.iter_size
             loss += args.w_acgan_adv * D_ACGAN_adv_loss
 
@@ -352,6 +353,7 @@ def main():
         D1_output = D_1(extracted_source_low)
         D1_tensor = Variable(torch.FloatTensor(D1_output.data.size()).fill_(config.HR_label)).cuda(args.gpu)
 
+        loss = 0
         if args.dis_loss:
             """
                 Discriminator Loss on Resolution-Invariant Feature
@@ -362,8 +364,8 @@ def main():
             D1_dis_loss = loss_adv(pred=D1_output, gt=D1_tensor) / args.iter_size / 2.0
             D1_dis_loss_value += D1_dis_loss.data.cpu().numpy()
 
-            loss = args.w_dis * D1_dis_loss
-            loss.backward()
+            loss += args.w_dis * D1_dis_loss
+            
 
         
         """ Train with Target Data """
@@ -382,12 +384,12 @@ def main():
             D1_dis_loss = loss_adv(pred=D1_output, gt=D1_tensor) / args.iter_size / 2.0
             D1_dis_loss_value += D1_dis_loss.data.cpu().numpy()
 
-            loss = args.w_dis * D1_dis_loss
-            loss.backward()
+            loss += args.w_dis * D1_dis_loss
             
-        
+#         loss = loss / args.iter_size    
+#         loss.backward()
 
-        D1_opt.step()
+#         D1_opt.step()
         
         
         """ Train Image-Level Discriminator """
@@ -395,9 +397,10 @@ def main():
             param.requires_grad = True
             
         D_ACGAN_opt.zero_grad()
+        loss = 0
         
         # For Fake image
-        D_ACGAN_output, _ = D_ACGAN(rec_target)
+        D_ACGAN_output, _ = D_ACGAN(rec_target.detach())
         D_ACGAN_tensor = Variable(torch.FloatTensor(D_ACGAN_output.data.size()).fill_(config.LR_label)).cuda(args.gpu)
 
         if args.acgan_adv_loss:
@@ -407,9 +410,9 @@ def main():
                 Args:
                     D_ACGAN_output: b x c x h x w (HR or LR)
             """
-#             D_ACGAN_dis_loss = loss_adv(pred=D_ACGAN_output, gt=D_ACGAN_tensor)
-            D_ACGAN_dis_loss = D_ACGAN_output.mean() # WGAN
-            D_ACGAN_dis_loss_value += D_ACGAN_dis_loss.data.cpu().numpy() / args.iter_size
+            D_ACGAN_dis_loss = loss_adv(pred=D_ACGAN_output, gt=D_ACGAN_tensor)
+#             D_ACGAN_dis_loss = D_ACGAN_output.mean() # WGAN
+            D_ACGAN_dis_loss_value += D_ACGAN_dis_loss.data.cpu().numpy() / args.iter_size / 2.0
             loss += args.w_acgan_adv * D_ACGAN_dis_loss
         
         # For Real image
@@ -423,9 +426,9 @@ def main():
                 Args:
                     D_ACGAN_output: b x c x h x w (HR or LR)
             """
-#             D_ACGAN_dis_loss = loss_adv(pred=D_ACGAN_output, gt=D_ACGAN_tensor)
-            D_ACGAN_dis_loss = - D_ACGAN_output.mean() # WGAN
-            D_ACGAN_dis_loss_value += D_ACGAN_dis_loss.data.cpu().numpy() / args.iter_size
+            D_ACGAN_dis_loss = loss_adv(pred=D_ACGAN_output, gt=D_ACGAN_tensor)
+#             D_ACGAN_dis_loss = - D_ACGAN_output.mean() # WGAN
+            D_ACGAN_dis_loss_value += D_ACGAN_dis_loss.data.cpu().numpy() / args.iter_size / 2.0
             loss += args.w_acgan_adv * D_ACGAN_dis_loss
             
         if args.acgan_cls_loss:    
@@ -443,7 +446,8 @@ def main():
             
             
 
-        
+        loss = loss / args.iter_size    
+        loss.backward()
         D_ACGAN_opt.step()
         
         

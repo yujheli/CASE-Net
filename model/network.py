@@ -302,10 +302,10 @@ class VAE_Decoder(nn.Module):
         if features is not None:
             f1, f2, f3, f4, f5 = features
             block0 = self.block0(data)
-            block1 = self.block1(block0)
+            block1 = self.block1(block0+f5)
             block2 = self.block2(block1+f4)
             block3 = self.block3(block2)
-            block4 = self.block4(block3+f2)
+            block4 = self.block4(block3)
             block5 = self.block5(block4)
         else:
             block0 = self.block0(data)
@@ -316,7 +316,180 @@ class VAE_Decoder(nn.Module):
             block5 = self.block5(block4)
         
         return block5      
+
     
+class Res_Decoder(nn.Module):
+    def __init__(self,
+                 backbone='resnet-101', input_dim=4096, code_dim=750, skip_connection=False):
+        super(Res_Decoder, self).__init__()
+
+        self.skip_connection = skip_connection
+        self.input_dim = input_dim
+        self.code_dim = code_dim
+
+        
+        channel_list = [1024, 512, 256, 128, 64, 3]
+        if self.skip_connection:
+#             skipped_list = [0, 0, 512, 256, 0] # skip f3, f2
+            skipped_list = [0, 1024, 512, 0, 0]
+            #skipped_list = [2048, 1024, 512, 256, 64] # skip f3, f2
+        else:
+            skipped_list = [0, 0, 0, 0, 0]
+        
+        self.block0 = nn.Sequential(
+            nn.ConvTranspose2d(self.input_dim+self.code_dim, channel_list[0], kernel_size=3, stride=2, padding=1, output_padding=1),
+            nn.BatchNorm2d(channel_list[0]),
+            nn.ReLU(inplace=True),
+            nn.Conv2d(channel_list[0], channel_list[0], kernel_size=3, padding=1),
+            nn.BatchNorm2d(channel_list[0])
+#             nn.ReLU(inplace=True),
+        )
+        self.residue_0 = nn.Sequential(
+#             nn.ReLU(inplace=True),
+            nn.ConvTranspose2d(self.input_dim+self.code_dim, channel_list[0], kernel_size=1, stride=2, output_padding=1),
+            nn.BatchNorm2d(channel_list[0])
+            )
+            
+        self.block1 = nn.Sequential(
+            nn.ReLU(inplace=True),
+            nn.ConvTranspose2d(channel_list[0] + skipped_list[0], channel_list[1], kernel_size=3, stride=2, padding=1, output_padding=1),
+            nn.BatchNorm2d(channel_list[1]),
+            nn.ReLU(inplace=True),
+            #droupout
+            nn.Conv2d(channel_list[1], channel_list[1], kernel_size=3, padding=1),
+            nn.BatchNorm2d(channel_list[1])
+            
+        )
+        self.residue_1 = nn.Sequential(
+            nn.ReLU(),
+            nn.ConvTranspose2d(channel_list[0], channel_list[1], kernel_size=1, stride=2, output_padding=1),
+            nn.BatchNorm2d(channel_list[1])
+            )
+
+        self.block2 = nn.Sequential(
+            nn.ReLU(inplace=True),
+            nn.ConvTranspose2d(channel_list[1]+ skipped_list[1], channel_list[2], kernel_size=3, stride=2, padding=1, output_padding=1),
+            nn.BatchNorm2d(channel_list[2]),
+            nn.ReLU(inplace=True),
+            nn.Conv2d(channel_list[2], channel_list[2], kernel_size=3, padding=1),
+            nn.BatchNorm2d(channel_list[2])
+#             nn.ReLU(inplace=True),
+#             nn.Conv2d(channel_list[2], channel_list[2], kernel_size=3, padding=1),
+#             nn.BatchNorm2d(channel_list[2]),
+#             nn.LeakyReLU(negative_slope=0.2, inplace=True)
+        )
+        self.residue_2 = nn.Sequential(
+            nn.ReLU(),
+            nn.ConvTranspose2d(channel_list[1], channel_list[2], kernel_size=1, stride=2,output_padding=1),
+            nn.BatchNorm2d(channel_list[2])
+            )
+
+        self.block3 = nn.Sequential(
+            nn.ReLU(inplace=True),
+            nn.ConvTranspose2d(channel_list[2] + skipped_list[2], channel_list[3], kernel_size=3, stride=2, padding=1, output_padding=1),
+            nn.BatchNorm2d(channel_list[3]),
+            nn.ReLU(inplace=True),
+            nn.Conv2d(channel_list[3], channel_list[3], kernel_size=3, padding=1),
+            nn.BatchNorm2d(channel_list[3])
+#             nn.ReLU(inplace=True),
+#             nn.Conv2d(channel_list[3], channel_list[3], kernel_size=3, padding=1),
+#             nn.BatchNorm2d(channel_list[3]),
+#             nn.LeakyReLU(negative_slope=0.2, inplace=True)
+        )
+        self.residue_3 = nn.Sequential(
+            nn.ReLU(),
+            nn.ConvTranspose2d(channel_list[2], channel_list[3], kernel_size=1, stride=2, output_padding=1),
+            nn.BatchNorm2d(channel_list[3])
+            )
+
+        self.block4 = nn.Sequential(
+            nn.ReLU(inplace=True),
+            nn.ConvTranspose2d(channel_list[3] + skipped_list[3], channel_list[4], kernel_size=3, stride=2, padding=1, output_padding=1),
+            nn.BatchNorm2d(channel_list[4]),
+            nn.ReLU(inplace=True),
+            nn.Conv2d(channel_list[4], channel_list[4], kernel_size=3, padding=1),
+            nn.BatchNorm2d(channel_list[4])
+#             nn.ReLU(inplace=True),
+#             nn.Conv2d(channel_list[4], channel_list[4], kernel_size=3, padding=1),
+#             nn.BatchNorm2d(channel_list[4]),
+#             nn.LeakyReLU(negative_slope=0.2, inplace=True)
+        )
+        self.residue_4 = nn.Sequential(
+            nn.ReLU(),
+            nn.ConvTranspose2d(channel_list[3], channel_list[4], kernel_size=1, stride=2, output_padding=1),
+            nn.BatchNorm2d(channel_list[4])
+            )
+
+        self.block5 = nn.Sequential(
+            nn.ReLU(inplace=True),
+            nn.ConvTranspose2d(channel_list[4] + skipped_list[4], channel_list[5], kernel_size=3, stride=2, padding=1, output_padding=1),
+            nn.BatchNorm2d(channel_list[5]),
+            nn.ReLU(inplace=True),
+#             nn.Conv2d(channel_list[5], channel_list[5], kernel_size=3, padding=1),
+#             nn.BatchNorm2d(channel_list[5]),
+#             nn.LeakyReLU(negative_slope=0.2, inplace=True),
+            nn.Conv2d(channel_list[5], channel_list[5], kernel_size=3, padding=1),
+#             nn.BatchNorm2d(channel_list[5]),
+            nn.Tanh()
+        )
+
+    def forward(self, data, features=None):
+        
+        if features is not None:
+            f1, f2, f3, f4, f5 = features
+#             block0 = self.block0(data)
+#             block1 = self.block1(block0+f5)
+#             block2 = self.block2(block1+f4)
+#             block3 = self.block3(block2)
+#             block4 = self.block4(block3)
+#             block5 = self.block5(block4)
+            
+            block0 = self.block0(data)
+            residue0 = self.residue_0(data)
+            out0 = block0+residue0
+            
+            block1 = self.block1(out0)
+            residue1 = self.residue_1(out0)
+            out1 = block1+residue1
+            
+            block2 = self.block2(out1)
+            residue2 = self.residue_2(out1)
+            out2 = block2+residue2
+            
+            block3 = self.block3(torch.cat([out2,f3],dim=1))
+            residue3 = self.residue_3(out2)
+            out3 = block3+residue3
+            
+            block4 = self.block4(torch.cat([out3,f2],dim=1))
+            residue4 = self.residue_4(out3)
+            out4 = block4+residue4
+            
+            block5 = self.block5(out4)
+            
+        else:
+            block0 = self.block0(data)
+            residue0 = self.residue_0(data)
+            out0 = block0+residue0
+            
+            block1 = self.block1(out0)
+            residue1 = self.residue_1(out0)
+            out1 = block1+residue1
+            
+            block2 = self.block2(out1)
+            residue2 = self.residue_2(out1)
+            out2 = block2+residue2
+            
+            block3 = self.block3(out2)
+            residue3 = self.residue_3(out2)
+            out3 = block3+residue3
+            
+            block4 = self.block4(out3)
+            residue4 = self.residue_4(out3)
+            out4 = block4+residue4
+            
+            block5 = self.block5(out4)
+        
+        return block5    
     
 class AdaptVAEReID(nn.Module):
     def __init__(self,
@@ -325,31 +498,32 @@ class AdaptVAEReID(nn.Module):
                  classifier_input_dim=2048,
                  classifier_output_dim=config.DUKE_CLASS_NUM,
                  use_cuda=True,
-                 local_conv_out_channels=128,mu_dim=4096, code_dim=config.DUKE_CLASS_NUM):
+                 local_conv_out_channels=128,mu_dim=2048, code_dim=config.DUKE_CLASS_NUM):
         super(AdaptVAEReID, self).__init__()
 
         self.extractor = Extractor(backbone=backbone)
         
         self.code_dim = code_dim
         self.mu_dim = mu_dim
+        self.skip_connection = skip_connection
         
 #         self.enc_mu = nn.Conv2d(classifier_input_dim, self.mu_dim, kernel_size=4, stride=2,padding=1)
 #         self.enc_logvar = nn.Conv2d(classifier_input_dim, self.mu_dim, kernel_size=4, stride=2,padding=1)
-        self.encode_mean_logvar = Encode_Mean_Logvar()
+        self.encode_mean_logvar = Encode_Mean_Logvar(input_channel = classifier_input_dim, output_channel = self.mu_dim)
 
-        self.decoder = VAE_Decoder(backbone=backbone, code_dim=self.code_dim)
+        self.decoder = Res_Decoder(backbone=backbone, input_dim=self.mu_dim, code_dim=self.code_dim, skip_connection=self.skip_connection)
 
         self.classifier = Classifier(input_dim=classifier_input_dim,
                                      output_dim=classifier_output_dim)
 
-        self.skip_connection = skip_connection
+        
 
         self.avgpool = nn.AvgPool2d((8,4))
         
         #local feature
         self.local_conv = nn.Conv2d(classifier_input_dim, local_conv_out_channels, 1)
         self.local_bn = nn.BatchNorm2d(local_conv_out_channels)
-        self.local_relu = nn.ReLU(inplace=True)
+        self.local_relu = nn.ReLU()
 
         if use_cuda:
             self.extractor = self.extractor.cuda()
@@ -433,10 +607,16 @@ class AdaptVAEReID(nn.Module):
 #         z = Variable(mu.data.new(mu.size()).normal_())
 
 #         reconstruct = self.decoder(features=features)
-        if insert_attrs is not None:
-            reconstruct = self.decode(z, insert_attrs, features=features)    
+
+        if self.skip_connection:
+            skip_features = features
         else:
-            reconstruct = self.decode(z, cls_vector, features=None)
+            skip_features = None
+    
+        if insert_attrs is not None:
+            reconstruct = self.decode(z, insert_attrs, features=skip_features)    
+        else:
+            reconstruct = self.decode(z, cls_vector, features=skip_features)
             
 
         
