@@ -220,7 +220,7 @@ def main():
                 image[i] = inv_normalize(image[i])
 
             writer.add_image('HR image', make_grid(image, nrow=16), step+1)
-            writer.add_image('Reconstructed HR image', make_grid(source_dict['image'], nrow=16), step+1)
+            writer.add_image('Reconstructed HR image', make_grid(source_dict['rec_image'], nrow=16), step+1)
 
 
         """ Train Target Data """
@@ -258,7 +258,6 @@ def main():
 
             KL_loss_value += kl_loss.data.cpu().numpy() / args.iter_size / 2.0
             loss += args.w_KL * kl_loss
-
 
         if args.cls_loss:
             cls_loss = loss_cls(pred=target_dict['cls_vector'], 
@@ -361,13 +360,13 @@ def main():
         D_ACGAN_output, cls_ACGAN = D_ACGAN(target_dict['rec_image'].detach())
         D_ACGAN_tensor = Variable(torch.FloatTensor(D_ACGAN_output.data.size()).fill_(config.FAKE)).cuda(args.gpu)
 
-        if args.acgan_cls_loss: 
-            D_ACGAN_cls_loss = loss_cls(pred=cls_ACGAN, 
-                                        gt=label, 
-                                        use_cuda=use_cuda)
+#         if args.acgan_cls_loss: 
+#             D_ACGAN_cls_loss = loss_cls(pred=cls_ACGAN, 
+#                                         gt=label, 
+#                                         use_cuda=use_cuda)
 
-            D_ACGAN_cls_loss_value += D_ACGAN_cls_loss.data.cpu().numpy() / args.iter_size / 2.0
-            loss += args.w_acgan_cls * D_ACGAN_cls_loss
+#             D_ACGAN_cls_loss_value += D_ACGAN_cls_loss.data.cpu().numpy() / args.iter_size / 2.0
+#             loss += args.w_acgan_cls * D_ACGAN_cls_loss
 
 
         if args.acgan_dis_loss:
