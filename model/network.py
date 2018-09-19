@@ -335,7 +335,7 @@ class Res_Decoder(nn.Module):
             #skipped_list = [2048, 1024, 512, 256, 64] # skip f3, f2
         else:
             skipped_list = [0, 0, 0, 0, 0]
-        
+
         self.block0 = nn.Sequential(
             nn.ConvTranspose2d(self.input_dim+self.code_dim, channel_list[0], kernel_size=3, stride=2, padding=1, output_padding=1),
             nn.BatchNorm2d(channel_list[0]),
@@ -575,6 +575,7 @@ class AdaptVAEReID(nn.Module):
 
         return mu, logvar
     
+
     def reparameterize(self, mu, logvar):
         if self.training:
             std = logvar.mul(0.5).exp_()
@@ -628,7 +629,19 @@ class AdaptVAEReID(nn.Module):
         # shape [N, H, c]
         local_feat = local_feat.squeeze(-1).permute(0, 2, 1)
 
-        return latent_feature, features, cls_vector, reconstruct, global_feat, local_feat, mu, logvar
+        #return latent_feature, features, cls_vector, reconstruct, global_feat, local_feat, mu, logvar
+        #return {'latent_vector': latent_feature, 
+
+        resolution_feature = features[-1]
+
+        return {'latent_vector': latent_feature, 
+                'resolution_feature': resolution_feature, 
+                'cls_vector': cls_vector, 
+                'rec_image': reconstruct, 
+                'global_feature': global_feat, 
+                'local_feature': local_feat, 
+                'mu': mu, 
+                'logvar': logvar}
     
     
     

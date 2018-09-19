@@ -36,6 +36,7 @@ DIS_LOSS=False
 TRIPLET_LOSS=False
 ACGAN_CLS_LOSS=True
 ACGAN_ADV_LOSS=True
+ACGAN_DIS_LOSS=True
 KL_LOSS=True
 GP_LOSS=False
 
@@ -45,8 +46,10 @@ W_ADV=0.01
 W_DIS=0.01
 W_GLOBAL=10.0
 W_LOCAL=5.0
-W_ACGAN_CLS=1.0
-W_ACGAN_ADV=1.0
+
+W_ACGAN_CLS=10.0
+W_ACGAN_ADV=0.01
+W_ACGAN_DIS=0.01
 W_KL=1
 W_GP=1
 
@@ -69,6 +72,7 @@ python3 train-vae.py --model-dir $MODEL_DIR \
                      --adv-loss $ADV_LOSS \
                      --KL-loss $KL_LOSS \
                      --acgan-adv-loss $ACGAN_ADV_LOSS \
+                     --acgan-dis-loss $ACGAN_DIS_LOSS \
                      --dis-loss $DIS_LOSS \
                      --triplet-loss $TRIPLET_LOSS \
                      --gp-loss $GP_LOSS \
@@ -78,13 +82,15 @@ python3 train-vae.py --model-dir $MODEL_DIR \
                      --w-KL $W_KL \
                      --w-adv $W_ADV \
                      --w-acgan-adv $W_ACGAN_ADV \
+                     --w-acgan-dis $W_ACGAN_DIS \
                      --w-dis $W_DIS \
                      --w-global $W_GLOBAL \
                      --w-local $W_LOCAL \
                      --w-gp $W_GP \
-                     --extractor-path $EXTRACTOR_PATH \
-                     --classifier-path $CLASSIFIER_PATH \
-                     --var-path $VAR_PATH \
-                     --discriminator-path $DISCRIMINATOR_PATH \
-                     --acgan-path $ACGAN_PATH \
-                     --decoder-path $DECODER_PATH \
+                     #--extractor-path $EXTRACTOR_PATH \
+                     #--decoder-path $DECODER_PATH \
+                     #--classifier-path $CLASSIFIER_PATH \
+                     #--acgan-path $ACGAN_PATH \
+                     #--var-path $VAR_PATH \
+                     #--discriminator-path $DISCRIMINATOR_PATH
+
