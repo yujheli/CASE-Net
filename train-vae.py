@@ -283,9 +283,12 @@ def main():
         #                        gt=rec_image, 
         #                        use_cuda=use_cuda)
 
+<<<<<<< HEAD
         #    rec_loss_value += rec_loss.data.cpu().numpy() / args.iter_size /2.0
         #    loss += args.w_rec * rec_loss
 
+=======
+>>>>>>> a570748f708217682dbade01c4ccac15332ad449
         if args.cls_loss:
             cls_loss = loss_cls(pred=target_dict['cls_vector'], 
                                 gt=label, 
