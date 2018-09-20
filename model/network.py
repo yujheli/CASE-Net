@@ -331,8 +331,9 @@ class Res_Decoder(nn.Module):
         channel_list = [1024, 512, 256, 128, 64, 3]
         if self.skip_connection:
 #             skipped_list = [0, 0, 512, 256, 0] # skip f3, f2
-            skipped_list = [0, 1024, 512, 0, 0]
+            skipped_list = [0, 1024, 512, 256, 0] # skip f4, f3, f2
             #skipped_list = [2048, 1024, 512, 256, 64] # skip f3, f2
+            full_skipped_list = [2048, 1024, 512, 256, 64]
         else:
             skipped_list = [0, 0, 0, 0, 0]
 
@@ -371,6 +372,7 @@ class Res_Decoder(nn.Module):
             nn.ConvTranspose2d(channel_list[1]+ skipped_list[1], channel_list[2], kernel_size=3, stride=2, padding=1, output_padding=1),
             nn.BatchNorm2d(channel_list[2]),
             nn.ReLU(inplace=True),
+           
             nn.Conv2d(channel_list[2], channel_list[2], kernel_size=3, padding=1),
             nn.BatchNorm2d(channel_list[2])
 #             nn.ReLU(inplace=True),
@@ -432,11 +434,52 @@ class Res_Decoder(nn.Module):
 #             nn.BatchNorm2d(channel_list[5]),
             nn.Tanh()
         )
+        
+        
+        if self.skip_connection:
+            self.f2_block = nn.Sequential(
+            nn.Conv2d(full_skipped_list[4], full_skipped_list[3], kernel_size=5, stride=2, padding=2),
+            nn.BatchNorm2d(full_skipped_list[3]),
+            nn.LeakyReLU(negative_slope=0.2, inplace=True),
+            nn.Conv2d(full_skipped_list[3], full_skipped_list[3], kernel_size=3, padding=1),
+            nn.BatchNorm2d(full_skipped_list[3]),
+            nn.LeakyReLU(negative_slope=0.2, inplace=True),
+        
+       
+            )
+            
+            self.f3_block = nn.Sequential(
+            nn.Conv2d(full_skipped_list[3], full_skipped_list[2], kernel_size=5, stride=2, padding=2),
+            nn.BatchNorm2d(full_skipped_list[2]),
+            nn.LeakyReLU(negative_slope=0.2, inplace=True),
+            nn.Conv2d(full_skipped_list[2], full_skipped_list[2], kernel_size=3, padding=1),
+            nn.BatchNorm2d(full_skipped_list[2]),
+            nn.LeakyReLU(negative_slope=0.2, inplace=True),
+            )
+            
+            self.f4_block = nn.Sequential(
+            nn.Conv2d(full_skipped_list[2], full_skipped_list[1], kernel_size=5, stride=2, padding=2),
+            nn.BatchNorm2d(full_skipped_list[1]),
+            nn.LeakyReLU(negative_slope=0.2, inplace=True),
+            nn.Conv2d(full_skipped_list[1], full_skipped_list[1], kernel_size=3, padding=1),
+            nn.BatchNorm2d(full_skipped_list[1]),
+            nn.LeakyReLU(negative_slope=0.2, inplace=True),
+            )
+            
+            
 
+        
     def forward(self, data, features=None):
         
         if features is not None:
             f1, f2, f3, f4, f5 = features
+            
+            f2_e = self.f2_block(f1)
+            f3_e = self.f3_block(f2)
+            f4_e = self.f4_block(f3)
+            
+            skip_features_dif = [F.avg_pool2d(f2_e,(8,4)), F.avg_pool2d(f3_e,(8,4)), F.avg_pool2d(f4_e,(8,4))]
+            skip_features_ori = [F.avg_pool2d(f2,(8,4)), F.avg_pool2d(f3,(8,4)), F.avg_pool2d(f4,(8,4))]
 #             block0 = self.block0(data)
 #             block1 = self.block1(block0+f5)
 #             block2 = self.block2(block1+f4)
@@ -452,19 +495,22 @@ class Res_Decoder(nn.Module):
             residue1 = self.residue_1(out0)
             out1 = block1+residue1
             
-            block2 = self.block2(out1)
+            block2 = self.block2(torch.cat([out1, f4_e],dim=1))
             residue2 = self.residue_2(out1)
             out2 = block2+residue2
             
-            block3 = self.block3(torch.cat([out2,f3],dim=1))
+            block3 = self.block3(torch.cat([out2, f3_e],dim=1))
             residue3 = self.residue_3(out2)
             out3 = block3+residue3
             
-            block4 = self.block4(torch.cat([out3,f2],dim=1))
+#             block4 = self.block4(out3)
+            block4 = self.block4(torch.cat([out3,f2_e],dim=1))
             residue4 = self.residue_4(out3)
             out4 = block4+residue4
             
             block5 = self.block5(out4)
+            
+            return block5, skip_features_dif, skip_features_ori
             
         else:
             block0 = self.block0(data)
@@ -489,7 +535,7 @@ class Res_Decoder(nn.Module):
             
             block5 = self.block5(out4)
         
-        return block5    
+            return block5    
     
 class AdaptVAEReID(nn.Module):
     def __init__(self,
@@ -550,9 +596,9 @@ class AdaptVAEReID(nn.Module):
                 H,W = z.size()[2], z.size()[3]
                 z = torch.cat([z,insert_attrs.unsqueeze(-1).unsqueeze(-1).repeat(1,1,H,W)],dim=1)
 #                 print(z.size())
-        reconstruct = self.decoder(data=z, features=features)
+        reconstruct, skip_features_dif, skip_features_ori = self.decoder(data=z, features=features)
        
-        return reconstruct
+        return reconstruct, skip_features_dif, skip_features_ori
     
     def encode(self, x):
 #         for l in range(len(self.enc_layers)-1):
@@ -615,9 +661,9 @@ class AdaptVAEReID(nn.Module):
             skip_features = None
     
         if insert_attrs is not None:
-            reconstruct = self.decode(z, insert_attrs, features=skip_features)    
+            reconstruct, skip_features_dif, skip_features_ori = self.decode(z, insert_attrs, features=skip_features)    
         else:
-            reconstruct = self.decode(z, cls_vector, features=skip_features)
+            reconstruct, skip_features_dif, skip_features_ori = self.decode(z, cls_vector, features=skip_features)
             
 
         
@@ -634,14 +680,24 @@ class AdaptVAEReID(nn.Module):
 
         resolution_feature = features[-1]
 
-        return {'latent_vector': latent_feature, 
-                'resolution_feature': resolution_feature, 
-                'cls_vector': cls_vector, 
-                'rec_image': reconstruct, 
-                'global_feature': global_feat, 
-                'local_feature': local_feat, 
-                'mu': mu, 
-                'logvar': logvar}
+        return_dict = {'latent_vector': latent_feature, 
+                       'resolution_feature': resolution_feature, 
+                       'cls_vector': cls_vector, 
+                       'rec_image': reconstruct, 
+                       'global_feature': global_feat, 
+                       'local_feature': local_feat, 
+                       'mu': mu, 
+                       'logvar': logvar,
+                       'image': data,
+                       'features': skip_features_ori,
+                       'skip_e': skip_features_dif }
+
+#         if insert_attrs is not None:
+#             return_dict['skip_e'] = skip_features_e
+#         else:
+#             return_dict['skip_e'] = cls_vector
+
+        return return_dict
     
     
     
