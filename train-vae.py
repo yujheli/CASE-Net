@@ -39,6 +39,15 @@ def loss_KL(mu, logvar):
     return KLD
 
 
+def loss_diff(f1,f2):
+    
+    f1 = f1.view(f1.size()[0],-1)
+    f2 = f2.view(f2.size()[0],-1)
+    cosine_diff = F.cosine_similarity(f1,f2).mean()
+    
+    return cosine_diff
+
+
 def loss_rec(pred, gt, use_cuda=True):
     criterion = ReconstructionLoss(dist_metric='L1', 
                                    use_cuda=use_cuda)
@@ -123,7 +132,9 @@ def main():
         model.train()
         D_resolution.train()
         D_ACGAN.train()
-
+        
+        diff_loss_value = 0
+        
         cls_loss_value = 0
         rec_loss_value = 0
         
@@ -208,7 +219,14 @@ def main():
 
             rec_loss_value += rec_loss.data.cpu().numpy() / args.iter_size
             loss += args.w_rec * rec_loss
-
+        
+        # Difference loss
+        if args.diff_loss:
+            for f1, f2 in zip(source_dict['skip_e'],source_dict['features']):
+                diff_loss = loss_diff(f1, f2)
+                diff_loss_value += diff_loss.data.cpu().numpy() / 2.0 / len(source_dict['skip_e'])
+            loss += args.w_diff * diff_loss
+        
         loss = loss / args.iter_size
         loss.backward()
 
@@ -220,7 +238,7 @@ def main():
                 image[i] = inv_normalize(image[i])
 
             writer.add_image('HR image', make_grid(image, nrow=16), step+1)
-            writer.add_image('Reconstructed HR image', make_grid(source_dict['image'], nrow=16), step+1)
+            writer.add_image('Reconstructed HR image', make_grid(source_dict['rec_image'], nrow=16), step+1)
 
 
         """ Train Target Data """
@@ -258,7 +276,15 @@ def main():
 
             KL_loss_value += kl_loss.data.cpu().numpy() / args.iter_size / 2.0
             loss += args.w_KL * kl_loss
+        
+        
+        #if args.rec_loss:
+        #    rec_loss = loss_rec(pred=target_dict['rec_image'], 
+        #                        gt=rec_image, 
+        #                        use_cuda=use_cuda)
 
+        #    rec_loss_value += rec_loss.data.cpu().numpy() / args.iter_size /2.0
+        #    loss += args.w_rec * rec_loss
 
         if args.cls_loss:
             cls_loss = loss_cls(pred=target_dict['cls_vector'], 
@@ -304,6 +330,14 @@ def main():
 
             D_ACGAN_adv_loss_value += D_ACGAN_adv_loss.data.cpu().numpy() / args.iter_size
             loss += args.w_acgan_adv * D_ACGAN_adv_loss
+            
+            
+        # Difference loss
+        if args.diff_loss:
+            for f1, f2 in zip(target_dict['skip_e'],target_dict['features']):
+                diff_loss = loss_diff(f1, f2)
+                diff_loss_value += diff_loss.data.cpu().numpy() / args.iter_size / 2.0 / len(target_dict['skip_e'])
+            loss += args.w_diff * diff_loss
 
         loss = loss / args.iter_size
         loss.backward()
@@ -361,13 +395,13 @@ def main():
         D_ACGAN_output, cls_ACGAN = D_ACGAN(target_dict['rec_image'].detach())
         D_ACGAN_tensor = Variable(torch.FloatTensor(D_ACGAN_output.data.size()).fill_(config.FAKE)).cuda(args.gpu)
 
-        if args.acgan_cls_loss: 
-            D_ACGAN_cls_loss = loss_cls(pred=cls_ACGAN, 
-                                        gt=label, 
-                                        use_cuda=use_cuda)
+#         if args.acgan_cls_loss: 
+#             D_ACGAN_cls_loss = loss_cls(pred=cls_ACGAN, 
+#                                         gt=label, 
+#                                         use_cuda=use_cuda)
 
-            D_ACGAN_cls_loss_value += D_ACGAN_cls_loss.data.cpu().numpy() / args.iter_size / 2.0
-            loss += args.w_acgan_cls * D_ACGAN_cls_loss
+#             D_ACGAN_cls_loss_value += D_ACGAN_cls_loss.data.cpu().numpy() / args.iter_size / 2.0
+#             loss += args.w_acgan_cls * D_ACGAN_cls_loss
 
 
         if args.acgan_dis_loss:
@@ -455,6 +489,9 @@ def main():
 
         if args.gp_loss:
             print_string += ' GP: {:.6f}'.format(GP_loss_value)
+        
+        if True:
+            print_string += ' Diff: {:.6f}'.format(diff_loss_value)
 
 
         print(print_string)
@@ -488,6 +525,7 @@ def main():
         writer.add_scalar('Local Triplet Loss', local_loss_value, step+1)
         writer.add_scalar('KLD Loss', KL_loss_value, step+1)
         writer.add_scalar('GP Loss', GP_loss_value, step+1)
+        writer.add_scalar('Diff Loss', diff_loss_value, step+1)
 
         
         if (step+1) % args.eval_steps == 0:

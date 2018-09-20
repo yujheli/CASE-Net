@@ -11,13 +11,13 @@ WEIGHT_DECAY=0.0005
 
 NUM_STEPS=250000
 ITER_SIZE=1
-EVAL_STEPS=5000
-IMAGE_STEPS=25
+EVAL_STEPS=500
+IMAGE_STEPS=50
 
-SOURCE_DATASET=Market
-TARGET_DATASET=Market
+SOURCE_DATASET=CUHK
+TARGET_DATASET=CUHK
 
-PRETRAINED_DIR=/home/yujheli/Project/ycchen/pretrained/$SOURCE_DATASET/
+PRETRAINED_DIR=/home/yujheli/Project/ycchen/pretrained/$SOURCE_DATASET/down_1_2/multi
 PRETRAINED_DIR=trained_models
 DECODER_PATH=$PRETRAINED_DIR/Decoder_${SOURCE_DATASET}.pth.tar
 #EXTRACTOR_PATH=/home/yujheli/Project/ycchen/pretrained/Market/Extractor_Market_pretrain.pth.tar
@@ -29,29 +29,31 @@ DISCRIMINATOR_PATH=$PRETRAINED_DIR/D1_${SOURCE_DATASET}.pth.tar
 
 RANDOM_CROP=False
 
-REC_LOSS=True
+REC_LOSS=False
 CLS_LOSS=True
-ADV_LOSS=False
-DIS_LOSS=False
-TRIPLET_LOSS=False
+ADV_LOSS=True
+DIS_LOSS=True
+TRIPLET_LOSS=True
 ACGAN_CLS_LOSS=True
 ACGAN_ADV_LOSS=True
 ACGAN_DIS_LOSS=True
 KL_LOSS=True
 GP_LOSS=False
+DIFF_LOSS=True
 
-W_REC=10.0
+W_REC=1.0
 W_CLS=10.0
 W_ADV=0.01
 W_DIS=0.01
-W_GLOBAL=10.0
+W_GLOBAL=20.0
 W_LOCAL=5.0
 
-W_ACGAN_CLS=10.0
-W_ACGAN_ADV=0.01
-W_ACGAN_DIS=0.01
+W_ACGAN_CLS=1
+W_ACGAN_ADV=1
+W_ACGAN_DIS=1
 W_KL=1
 W_GP=1
+W_DIFF=10
 
 python3 train-vae.py --model-dir $MODEL_DIR \
                      --num-workers $NUM_WORKERS \
@@ -71,6 +73,7 @@ python3 train-vae.py --model-dir $MODEL_DIR \
                      --rec-loss $REC_LOSS \
                      --adv-loss $ADV_LOSS \
                      --KL-loss $KL_LOSS \
+                     --diff-loss $DIFF_LOSS \
                      --acgan-adv-loss $ACGAN_ADV_LOSS \
                      --acgan-dis-loss $ACGAN_DIS_LOSS \
                      --dis-loss $DIS_LOSS \
@@ -87,10 +90,11 @@ python3 train-vae.py --model-dir $MODEL_DIR \
                      --w-global $W_GLOBAL \
                      --w-local $W_LOCAL \
                      --w-gp $W_GP \
-                     #--extractor-path $EXTRACTOR_PATH \
-                     #--decoder-path $DECODER_PATH \
-                     #--classifier-path $CLASSIFIER_PATH \
-                     #--acgan-path $ACGAN_PATH \
-                     #--var-path $VAR_PATH \
-                     #--discriminator-path $DISCRIMINATOR_PATH
+                     --w-diff $W_DIFF \
+                     --extractor-path $EXTRACTOR_PATH \
+                     --classifier-path $CLASSIFIER_PATH \
+                     --var-path $VAR_PATH \
+                     --discriminator-path $DISCRIMINATOR_PATH\
+                     --decoder-path $DECODER_PATH \
+                     --acgan-path $ACGAN_PATH \
 
