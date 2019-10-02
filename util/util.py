@@ -1,6 +1,6 @@
 import os
 import config
-
+import numpy as np
 import torch
 import torch.optim as optim
 import torch.nn.functional as F
@@ -16,6 +16,7 @@ from data.msmt import MSMT
 from data.cuhk import CUHK
 from data.viper import VIPER
 from data.caviar import CAVIAR
+from data.veri import VERI
 
 from util.dataloader import DataLoader
 from util.normalize import NormalizeImage
@@ -26,6 +27,20 @@ inv_normalize = transforms.Normalize(
     std=[2.0, 2.0, 2.0]
 )
 
+def tensor2ims(image_tensor, imtype=np.uint8):
+    image_numpy = image_tensor.cpu().float().numpy()
+#     image_numpy = image_tensor
+    mean = np.array(config.MEAN)
+    std = np.array(config.STDDEV)
+    if image_numpy.shape[1] == 1:
+        # posemap
+        image_numpy = np.tile(image_numpy, (1, 3, 1, 1))
+#         image_numpy = np.transpose(image_numpy, (1, 2, 0)) * 255.0
+    else:
+#         image_numpy = image_numpy * std + mean
+        image_numpy = (np.transpose(image_numpy, (0, 2, 3, 1)) * std + mean)
+        image_numpy = np.transpose(image_numpy, (0, 3, 1, 2))
+    return torch.tensor(image_numpy)
 
 def calc_gradient_penalty(netD, real_data, fake_data, use_gpu = True, dec_output=2):
     alpha = torch.rand(real_data.shape[0], 1)
@@ -70,6 +85,11 @@ def make_one_hot(labels, args):
         classifier_output_dim = config.VIPER_CLASS_NUM
     elif args.source_dataset == 'CAVIAR':
         classifier_output_dim = config.CAVIAR_CLASS_NUM
+    elif args.source_dataset == 'VERI':
+        classifier_output_dim = config.VERI_CLASS_NUM
+    elif args.source_dataset == 'VRIC':
+        classifier_output_dim = config.VRIC_CLASS_NUM    
+        
     '''
     Converts an integer label torch.autograd.Variable to a one-hot Variable.
     
@@ -139,6 +159,10 @@ def init_model(args, use_cuda=True):
         classifier_output_dim = config.VIPER_CLASS_NUM
     elif args.source_dataset == 'CAVIAR':
         classifier_output_dim = config.CAVIAR_CLASS_NUM
+    elif args.source_dataset == 'VERI':
+        classifier_output_dim = config.VERI_CLASS_NUM
+    elif args.source_dataset == 'VRIC':
+        classifier_output_dim = config.VRIC_CLASS_NUM    
 
 
     model = AdaptVAEReID(backbone='resnet-50',
@@ -202,6 +226,11 @@ def init_ACGAN(args, use_cuda=True):
         classifier_output_dim = config.VIPER_CLASS_NUM
     elif args.source_dataset == 'CAVIAR':
         classifier_output_dim = config.CAVIAR_CLASS_NUM
+    elif args.source_dataset == 'VERI':
+        classifier_output_dim = config.VERI_CLASS_NUM
+    elif args.source_dataset == 'VRIC':
+        classifier_output_dim = config.VRIC_CLASS_NUM    
+
 
     model = ACGAN(fc_input_dim=config.D1_FC_INPUT_DIM,
                   class_num=classifier_output_dim,
@@ -212,6 +241,18 @@ def init_ACGAN(args, use_cuda=True):
         checkpoint = torch.load(args.acgan_path, map_location=lambda storage, loc: storage)
         for name, param in model.state_dict().items():
             model.state_dict()[name].copy_(checkpoint[name])
+            
+#     if args.extractor_path:
+#         print("Loading pre-trained extractor ACGAN...")
+#         checkpoint = torch.load(args.extractor_path, map_location=lambda storage, loc: storage)
+#         for name, param in model.extractor.state_dict().items():
+#             model.extractor.state_dict()[name].copy_(checkpoint[name])
+            
+#     if args.classifier_path:
+#         print("Loading pre-trained classifier...")
+#         checkpoint = torch.load(args.classifier_path, map_location=lambda storage, loc: storage)
+#         for name, param in model.classifier.state_dict().items():
+#             model.classifier.state_dict()[name].copy_(checkpoint[name])
 
     return model
 
@@ -230,10 +271,14 @@ def init_source_data(args):
         SourceData = VIPER
     elif args.source_dataset == 'CAVIAR':
         SourceData = CAVIAR
+    elif args.source_dataset == 'VERI':
+        SourceData = VERI
+    elif args.source_dataset == 'VRIC':
+        SourceData = VRIC
 
     source_data = SourceData(mode='source',
                              transform=NormalizeImage(['image', 'rec_image']),
-                             random_crop=args.random_crop)
+                             random_crop=args.random_crop, ds_factor=1)
 
     source_loader = DataLoader(source_data,
                                batch_size=args.batch_size,
@@ -258,11 +303,15 @@ def init_target_data(args):
         TargetData = VIPER
     elif args.target_dataset == 'CAVIAR':
         TargetData = CAVIAR
+    elif args.target_dataset == 'VERI':
+        TargetData = VERI
+    elif args.target_dataset == 'VRIC':
+        TargetData = VRIC
 
 
     target_data = TargetData(mode='train',
                              transform=NormalizeImage(['image', 'rec_image']),
-                             random_crop=args.random_crop)
+                             random_crop=args.random_crop,ds_factor=4)
 
     target_loader = DataLoader(target_data,
                                batch_size=args.batch_size,
@@ -287,13 +336,16 @@ def init_test_data(args):
         TestData = VIPER
     elif args.target_dataset == 'CAVIAR':
         TestData = CAVIAR
-
+    elif args.target_dataset == 'VERI':
+        TestData = VERI
+    elif args.target_dataset == 'VRIC':
+        TestData = VRIC
 
     test_data = TestData(mode='test',
-                         transform=NormalizeImage(['image']))
+                         transform=NormalizeImage(['image']),ds_factor=1)
 
     test_loader = DataLoader(test_data,
-                             batch_size=int(args.batch_size/2),
+                             batch_size=int(args.batch_size),
                              num_workers=args.num_workers,
                              pin_memory=True)
 
@@ -314,13 +366,17 @@ def init_query_data(args):
         QueryData = VIPER
     elif args.target_dataset == 'CAVIAR':
         QueryData = CAVIAR
+    elif args.target_dataset == 'VERI':
+        QueryData = VERI
+    elif args.target_dataset == 'VRIC':
+        QueryData = VRIC
 
 
     query_data = QueryData(mode='query',
-                           transform=NormalizeImage(['image']))
+                           transform=NormalizeImage(['image']),ds_factor=1)
 
     query_loader = DataLoader(query_data,
-                              batch_size=int(args.batch_size/2),
+                              batch_size=int(args.batch_size),
                               num_workers=args.num_workers,
                               pin_memory=True)
 

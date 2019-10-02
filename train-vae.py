@@ -13,7 +13,7 @@ from util.util import init_resolution_D, init_ACGAN
 from util.util import init_source_data, init_target_data
 from util.util import init_test_data, init_query_data
 from util.util import init_model_optim, init_D_optim
-from util.util import inv_normalize, calc_gradient_penalty, make_one_hot
+from util.util import inv_normalize, calc_gradient_penalty, make_one_hot, tensor2ims
 #from model.network import AdaptReID
 from model.network import AdaptVAEReID
 from model.discriminator import Discriminator, ACGAN
@@ -222,9 +222,16 @@ def main():
         
         # Difference loss
         if args.diff_loss:
+            
+            diff_loss = 0
             for f1, f2 in zip(source_dict['skip_e'],source_dict['features']):
-                diff_loss = loss_diff(f1, f2)
-                diff_loss_value += diff_loss.data.cpu().numpy() / 2.0 / len(source_dict['skip_e'])
+                diff_loss += loss_diff(f1, f2)
+                diff_loss_value += diff_loss.data.cpu().numpy() 
+                
+                
+                
+            diff_loss = diff_loss / len(source_dict['skip_e']) / args.iter_size / 2.0
+            diff_loss_value = diff_loss_value / len(source_dict['skip_e']) / args.iter_size / 2.0
             loss += args.w_diff * diff_loss
         
         loss = loss / args.iter_size
@@ -233,12 +240,12 @@ def main():
 
         """ Visualize Reconstructed Source Image """
         if (step+1) % args.image_steps == 0:
-            for i in range(len(source_dict['rec_image'])):
-                source_dict['rec_image'][i] = inv_normalize(source_dict['rec_image'][i])
-                image[i] = inv_normalize(image[i])
+#             for i in range(len(source_dict['rec_image'])):
+#                 source_dict['rec_image'][i] = inv_normalize(source_dict['rec_image'][i])
+#                 image[i] = inv_normalize(image[i])
 
-            writer.add_image('HR image', make_grid(image, nrow=16), step+1)
-            writer.add_image('Reconstructed HR image', make_grid(source_dict['rec_image'], nrow=16), step+1)
+            writer.add_image('HR image', make_grid(tensor2ims(image.detach()), nrow=16), step+1)
+            writer.add_image('Reconstructed HR image', make_grid(tensor2ims(source_dict['rec_image'].detach()), nrow=16), step+1)
 
 
         """ Train Target Data """
@@ -282,13 +289,9 @@ def main():
         #    rec_loss = loss_rec(pred=target_dict['rec_image'], 
         #                        gt=rec_image, 
         #                        use_cuda=use_cuda)
-
-<<<<<<< HEAD
         #    rec_loss_value += rec_loss.data.cpu().numpy() / args.iter_size /2.0
         #    loss += args.w_rec * rec_loss
 
-=======
->>>>>>> a570748f708217682dbade01c4ccac15332ad449
         if args.cls_loss:
             cls_loss = loss_cls(pred=target_dict['cls_vector'], 
                                 gt=label, 
@@ -337,9 +340,16 @@ def main():
             
         # Difference loss
         if args.diff_loss:
+            
+            diff_loss = 0
             for f1, f2 in zip(target_dict['skip_e'],target_dict['features']):
-                diff_loss = loss_diff(f1, f2)
-                diff_loss_value += diff_loss.data.cpu().numpy() / args.iter_size / 2.0 / len(target_dict['skip_e'])
+                diff_loss += loss_diff(f1, f2)
+                diff_loss_value += diff_loss.data.cpu().numpy() 
+                
+                
+                
+            diff_loss = diff_loss / len(target_dict['skip_e']) / args.iter_size / 2.0
+            diff_loss_value = diff_loss_value / len(target_dict['skip_e']) / args.iter_size / 2.0
             loss += args.w_diff * diff_loss
 
         loss = loss / args.iter_size
@@ -453,12 +463,12 @@ def main():
         if (step+1) % args.image_steps == 0:
             save_model(args, model, D_resolution, D_ACGAN=D_ACGAN) # To save model
             
-            for i in range(len(target_dict['rec_image'])):
-                target_dict['rec_image'][i] = inv_normalize(target_dict['rec_image'][i])
-                image[i] = inv_normalize(image[i])
+#             for i in range(len(target_dict['rec_image'])):
+#                 target_dict['rec_image'][i] = inv_normalize(target_dict['rec_image'][i])
+#                 image[i] = inv_normalize(image[i])
 
-            writer.add_image('LR image', make_grid(image, nrow=16), step+1)
-            writer.add_image('Generated LR image', make_grid(target_dict['rec_image'], nrow=16), step+1)
+            writer.add_image('LR image', make_grid(tensor2ims(image.detach()), nrow=16), step+1)
+            writer.add_image('Generated LR image', make_grid(tensor2ims(target_dict['rec_image'].detach()), nrow=16), step+1)
 
 
         print_string = '[{:6d}/{:6d}]'.format(step+1, args.num_steps)

@@ -7,6 +7,25 @@ import torch.nn.functional as F
 import numpy as np
 import config
 
+def weights_init_kaiming(m):
+    classname = m.__class__.__name__
+    if classname.find('Conv') != -1:
+        init.kaiming_normal_(m.weight.data, a=0, mode='fan_in')
+    elif classname.find('Linear') != -1:
+        init.kaiming_normal_(m.weight.data, a=0, mode='fan_out')
+        init.constant_(m.bias.data, 0.0)
+    elif classname.find('InstanceNorm1d') != -1:
+        init.normal_(m.weight.data, 1.0, 0.02)
+        init.constant_(m.bias.data, 0.0)
+
+def weights_init_classifier(m):
+    classname = m.__class__.__name__
+    if classname.find('Linear') != -1:
+        init.normal_(m.weight.data, std=0.001)
+        init.constant_(m.bias.data, 0.0)
+
+
+
 class Extractor(nn.Module):
     def __init__(self,
                  backbone='resnet-101',
@@ -41,9 +60,11 @@ class Classifier(nn.Module):
         super(Classifier, self).__init__()
         self.linear = nn.Linear(input_dim, output_dim)
         self.softmax = nn.Softmax(dim=1)
+        self.batch_norm =  nn.BatchNorm1d(input_dim)
 
     def forward(self, data):
         data = data.view(data.size()[0],-1)
+        data = self.batch_norm(data)
         out = self.linear(data)
         return out
     
@@ -473,13 +494,14 @@ class Res_Decoder(nn.Module):
         
         if features is not None:
             f1, f2, f3, f4, f5 = features
+           
             
             f2_e = self.f2_block(f1)
             f3_e = self.f3_block(f2)
             f4_e = self.f4_block(f3)
             
-            skip_features_dif = [F.avg_pool2d(f2_e,(8,4)), F.avg_pool2d(f3_e,(8,4)), F.avg_pool2d(f4_e,(8,4))]
-            skip_features_ori = [F.avg_pool2d(f2,(8,4)), F.avg_pool2d(f3,(8,4)), F.avg_pool2d(f4,(8,4))]
+            skip_features_dif = [f2_e,f3_e, f4_e]
+            skip_features_ori = [f2, f3, f4]
 #             block0 = self.block0(data)
 #             block1 = self.block1(block0+f5)
 #             block2 = self.block2(block1+f4)
@@ -696,6 +718,71 @@ class AdaptVAEReID(nn.Module):
 #             return_dict['skip_e'] = skip_features_e
 #         else:
 #             return_dict['skip_e'] = cls_vector
+
+        return return_dict
+    
+    
+class Baseline_ReID(nn.Module):
+    def __init__(self,
+                 backbone='resnet-101',
+                 skip_connection=config.SKIP_CONNECTION,
+                 classifier_input_dim=2048,
+                 classifier_output_dim=config.DUKE_CLASS_NUM,
+                 use_cuda=True,
+                 local_conv_out_channels=128):
+        super(Baseline_ReID, self).__init__()
+
+        self.extractor = Extractor(backbone=backbone)
+        
+#         self.code_dim = code_dim
+#         self.mu_dim = mu_dim
+        self.skip_connection = skip_connection
+
+        self.classifier = Classifier(input_dim=classifier_input_dim,
+                                     output_dim=classifier_output_dim)
+
+        
+
+        self.avgpool = nn.AvgPool2d((8,4))
+        
+        #local feature
+        self.local_conv = nn.Conv2d(classifier_input_dim, local_conv_out_channels, 1)
+        self.local_bn = nn.BatchNorm2d(local_conv_out_channels)
+        self.local_relu = nn.ReLU()
+
+        if use_cuda:
+            self.extractor = self.extractor.cuda()
+            self.classifier = self.classifier.cuda()
+            self.local_conv = self.local_conv.cuda()
+            self.local_bn = self.local_bn.cuda()
+            self.local_relu = self.local_relu.cuda()
+#             self.enc_mu = self.enc_mu.cuda()
+# #             self.enc_logvar = self.enc_logvar.cuda()
+#             self.encode_mean_logvar = self.encode_mean_logvar.cuda()
+    
+ 
+    def forward(self, data):
+
+        features = self.extractor(data=data)
+
+        extracted_feature = features[-1]
+        
+        latent_feature = self.avgpool(extracted_feature)
+
+        cls_vector = self.classifier(data=latent_feature)
+        
+        # shape [N, C]
+        global_feat = latent_feature.view(latent_feature.size(0), -1)
+        # shape [N, C, H, 1]
+        local_feat = torch.mean(extracted_feature, -1, keepdim=True)
+        local_feat = self.local_relu(self.local_bn(self.local_conv(local_feat)))
+        # shape [N, H, c]
+        local_feat = local_feat.squeeze(-1).permute(0, 2, 1)
+
+        return_dict = {'latent_vector': latent_feature, 
+                       'cls_vector': cls_vector, 
+                       'global_feature': global_feat, 
+                       'local_feature': local_feat}
 
         return return_dict
     
