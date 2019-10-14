@@ -27,6 +27,26 @@ def to_edge(x):
     out = out.unsqueeze(1) 
     return out
 
+def to_grays(x):
+    x = x.data.cpu()
+    out = torch.FloatTensor(x.size(0), x.size(1), x.size(2), x.size(3))
+    mean = np.array(config.MEAN)
+    std = np.array(config.STDDEV)
+    for i in range(x.size(0)):
+        xx = recover(x[i,:,:,:])   # 3 channel, 256x128x3
+        xx = cv2.cvtColor(xx, cv2.COLOR_RGB2GRAY) # 256x128x1
+#         xx = cv2.Canny(xx, 10, 200) #256x128
+        xx = xx/255.0 - 0.5 # {-0.5,0.5}
+#         xx = xx/255.0
+#         xx = (xx-mean)/std
+#         xx += np.random.randn(xx.shape[0],xx.shape[1])*0.1  #add random noise
+        xx = torch.from_numpy(xx.astype(np.float32))
+        out[i,0,:,:] = xx
+        out[i,1,:,:] = xx
+        out[i,2,:,:] = xx
+#     out = out.unsqueeze(1) 
+    return out.cuda()
+    
 def to_gray(x):
     x = x.data.cpu().numpy().transpose((1, 2, 0))
 #     inp = inp.numpy().transpose((1, 2, 0))
@@ -38,7 +58,17 @@ def to_gray(x):
     img2[:,:,2] = gray
     xx = torch.from_numpy(img2.transpose((2,0,1)).astype(np.float32))
     return xx
-    
+
+def recover(inp):
+    inp = inp.numpy().transpose((1, 2, 0))
+    mean = np.array(config.MEAN)
+    std = np.array(config.STDDEV)
+    inp = std * inp + mean
+    inp = inp * 255.0
+    inp = np.clip(inp, 0, 255)
+    inp = inp.astype(np.uint8)
+    return inp
+
 class Market(Dataset):
     """
         mode:
@@ -143,6 +173,7 @@ class Market(Dataset):
             
         else:
             inds = self.hash_table[idx]
+            
             if len(inds) < self.im_per_id:
                 inds = np.random.choice(inds, self.im_per_id, replace=False)
             else:
@@ -152,6 +183,7 @@ class Market(Dataset):
             input_rec_list = []
             for id_ in inds:
                 input_image, rec_image = self.get_image(self.image_names, id_)
+                
                 input_image_list.append(self.normalize(input_image/255.0).unsqueeze(0))
                 input_rec_list.append(self.normalize(rec_image/255.0).unsqueeze(0))
 
@@ -159,16 +191,21 @@ class Market(Dataset):
             input_rec_list = torch.cat(input_rec_list)
 
             label = Variable(torch.from_numpy(np.array([idx] * self.im_per_id, dtype='int32')).long())
+            
+            #================================================================================================
+            input_pos_list = []
+            for id_ in inds:
+                input_image, rec_image = self.get_image(self.image_names, id_)
+                input_pos_list.append(self.normalize(input_image/255.0).unsqueeze(0))
+                
+            input_pos_list = torch.cat(input_pos_list)
+            #================================================================================================
+            
+            database = {'image': input_image_list, 'label': label, 'pos_image': input_pos_list} 
 
-            database = {'image': input_image_list} 
-
-            if self.mode == 'source':
-                database['label'] = label
-                database['rec_image'] = input_rec_list #rec_image
-
-            elif self.mode == 'train':
-                database['label'] = label
-                database['rec_image'] = input_rec_list #rec_image
+            
+#             database['label'] = label
+#             database['rec_image'] = input_rec_list #rec_image
 
             return database
 

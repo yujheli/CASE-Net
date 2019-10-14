@@ -163,7 +163,7 @@ def init_query_data(args):
 
 
     query_data = QueryData(mode='query',
-                           transform=NormalizeImage(['image']),ds_factor=1,q_gray=True)
+                           transform=NormalizeImage(['image']),ds_factor=1,q_gray=False)
 
     query_loader = DataLoader(query_data,
                               batch_size=int(args.batch_size),

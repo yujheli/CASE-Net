@@ -132,7 +132,7 @@ def init_test_data(args):
         TestData = VRIC
 
     test_data = TestData(mode='test',
-                         transform=NormalizeImage(['image']),ds_factor=1,g_gray=True)
+                         transform=NormalizeImage(['image']),ds_factor=1,g_gray=False)
 
     test_loader = DataLoader(test_data,
                              batch_size=int(args.batch_size),
@@ -163,7 +163,7 @@ def init_query_data(args):
 
 
     query_data = QueryData(mode='query',
-                           transform=NormalizeImage(['image']),ds_factor=1,q_gray=False)
+                           transform=NormalizeImage(['image']),ds_factor=1,q_gray=True)
 
     query_loader = DataLoader(query_data,
                               batch_size=int(args.batch_size),
@@ -234,7 +234,6 @@ def main():
 
     print('Rank:', rank1, rank5, rank10, rank20)
     print('mAP:', mAP)
-    print('Best rank1:', best_rank1)
     
 
 

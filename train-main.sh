@@ -1,19 +1,21 @@
+rm -rf runs
+
 MODEL_DIR=trained_models
 NUM_WORKERS=2
 GPU=1
 
-BATCH_SIZE=16
-LEARNING_RATE=0.001
+BATCH_SIZE=2
+LEARNING_RATE=0.0001
 MOMENTUM=0.9
 WEIGHT_DECAY=0.0005
 
 NUM_STEPS=250000
 ITER_SIZE=1
-EVAL_STEPS=500
+EVAL_STEPS=10000
 IMAGE_STEPS=50
 
-SOURCE_DATASET=Duke
-TARGET_DATASET=Duke
+SOURCE_DATASET=Market
+TARGET_DATASET=Market
 
 # PRETRAINED_DIR=/home/yujheli/Project/ycchen/pretrained/$SOURCE_DATASET/down_1_2/multi
 PRETRAINED_DIR=trained_models
@@ -31,7 +33,7 @@ REC_LOSS=True
 CLS_LOSS=True
 ADV_LOSS=True
 DIS_LOSS=True
-TRIPLET_LOSS=False
+TRIPLET_LOSS=True
 ACGAN_CLS_LOSS=True
 ACGAN_ADV_LOSS=True
 ACGAN_DIS_LOSS=True
@@ -53,7 +55,7 @@ W_KL=1
 W_GP=1
 W_DIFF=10
 
-CUDA_LAUNCH_BLOCKING=1 python3 test-baseline.py --model-dir $MODEL_DIR \
+CUDA_LAUNCH_BLOCKING=1 python3 train-main.py --model-dir $MODEL_DIR \
                      --num-workers $NUM_WORKERS \
                      --source-dataset $SOURCE_DATASET \
                      --target-dataset $TARGET_DATASET \
@@ -89,8 +91,8 @@ CUDA_LAUNCH_BLOCKING=1 python3 test-baseline.py --model-dir $MODEL_DIR \
                      --w-local $W_LOCAL \
                      --w-gp $W_GP \
                      --w-diff $W_DIFF \
-                     --extractor-path $EXTRACTOR_PATH \
-                     --classifier-path $CLASSIFIER_PATH \
+#                      --extractor-path $EXTRACTOR_PATH \
+#                      --classifier-path $CLASSIFIER_PATH \
 #                      --var-path $VAR_PATH \
 #                      --discriminator-path $DISCRIMINATOR_PATH\
 #                      --decoder-path $DECODER_PATH \
