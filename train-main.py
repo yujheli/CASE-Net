@@ -11,11 +11,12 @@ from util.normalize import NormalizeImage
 # from util.util import *
 #from model.network import AdaptReID
 from model.network import *
-from model.discriminator import Discriminator, ACGAN
+from model.discriminator import *
 from loss.loss import ClassificationLoss, ReconstructionLoss
 from loss.loss import TripletLoss
 from parser.parser import ArgumentParser
 from util.eval_utils import eval_metric
+from util.util import *
 from tensorboardX import SummaryWriter 
 from torchvision.utils import make_grid, save_image
 from torchvision import transforms
@@ -31,51 +32,80 @@ from data.veri import VERI
 import random
 import torch.nn.functional as F
 
+
 def init_model(args, use_cuda=True):
 
     if args.target_dataset == 'Duke':
         classifier_output_dim = config.DUKE_CLASS_NUM
     elif args.target_dataset == 'Market':
         classifier_output_dim = config.MARKET_CLASS_NUM
-    elif args.target_dataset == 'MSMT':
-        classifier_output_dim = config.MSMT_CLASS_NUM
-    elif args.target_dataset == 'CUHK':
-        classifier_output_dim = config.CUHK_CLASS_NUM
-    elif args.target_dataset == 'VIPER':
-        classifier_output_dim = config.VIPER_CLASS_NUM
-    elif args.target_dataset == 'CAVIAR':
-        classifier_output_dim = config.CAVIAR_CLASS_NUM
-    elif args.target_dataset == 'VERI':
-        classifier_output_dim = config.VERI_CLASS_NUM
-    elif args.target_dataset == 'VRIC':
-        classifier_output_dim = config.VRIC_CLASS_NUM    
+    # elif args.target_dataset == 'MSMT':
+    #     classifier_output_dim = config.MSMT_CLASS_NUM
+    # elif args.target_dataset == 'CUHK':
+    #     classifier_output_dim = config.CUHK_CLASS_NUM
+    # elif args.target_dataset == 'VIPER':
+    #     classifier_output_dim = config.VIPER_CLASS_NUM
+    # elif args.target_dataset == 'CAVIAR':
+    #     classifier_output_dim = config.CAVIAR_CLASS_NUM
+    # elif args.target_dataset == 'VERI':
+    #     classifier_output_dim = config.VERI_CLASS_NUM
+    # elif args.target_dataset == 'VRIC':
+    #     classifier_output_dim = config.VRIC_CLASS_NUM    
 
 
     model = Sense_ReID(backbone='resnet-50',
                          use_cuda=use_cuda,
                          classifier_output_dim=classifier_output_dim)
+    
+    
+#     model_dict = model.state_dict()
 
-#     if args.extractor_path:
-#         print("Loading pre-trained extractor...")
-#         checkpoint = torch.load(args.extractor_path, map_location=lambda storage, loc: storage)
+#     # 1. filter out unnecessary keys
+#     pretrained_dict = {k: v for k, v in pretrained_dict.items() if k in model_dict}
+#     # 2. overwrite entries in the existing state dict
+#     model_dict.update(pretrained_dict) 
+#     # 3. load the new state dict
+#     model.load_state_dict(pretrained_dict)
+
+    if args.extractor_path:
+        print("Loading pre-trained extractor...")
+        checkpoint = torch.load(args.extractor_path, map_location=lambda storage, loc: storage)
 #         for name, param in model.extractor.state_dict().items():
 #             model.extractor.state_dict()[name].copy_(checkpoint[name])
+        for name, param in model.structure_extractor.state_dict().items():
+            model.structure_extractor.state_dict()[name].copy_(checkpoint[name])
 
-#     if args.classifier_path:
-#         print("Loading pre-trained classifier...")
-#         checkpoint = torch.load(args.classifier_path, map_location=lambda storage, loc: storage)
+    if args.classifier_path:
+        print("Loading pre-trained classifier...")
+        checkpoint = torch.load(args.classifier_path, map_location=lambda storage, loc: storage)
 #         for name, param in model.classifier.state_dict().items():
 #             model.classifier.state_dict()[name].copy_(checkpoint[name])
+        for name, param in model.structure_classifier.state_dict().items():
+            model.structure_classifier.state_dict()[name].copy_(checkpoint[name])
+            
+    if args.generator_path:
+        print("Loading pre-trained generator...")
+        checkpoint = torch.load(args.generator_path, map_location=lambda storage, loc: storage)
+
+        for name, param in model.generator.state_dict().items():
+            model.generator.state_dict()[name].copy_(checkpoint[name])
+
 
     return model
 
-def save_model(args, model):
+def save_model(args, model, dis_model):
 
-    extractor_path = os.path.join(args.model_dir, 'Extractor_{}.pth.tar'.format(args.source_dataset))
+    # s_extractor_path = os.path.join(args.model_dir, 'S_Extractor_{}.pth.tar'.format(args.source_dataset))
+    c_extractor_path = os.path.join(args.model_dir, 'C_Extractor_{}.pth.tar'.format(args.source_dataset))
     classifier_path = os.path.join(args.model_dir, 'Classifier_{}.pth.tar'.format(args.source_dataset))
+    generator_path = os.path.join(args.model_dir, 'Generator_{}.pth.tar'.format(args.source_dataset))
+    discriminator_path = os.path.join(args.model_dir, 'Discriminator_{}.pth.tar'.format(args.source_dataset))
 
-    torch.save(model.extractor.state_dict(), extractor_path)
-    torch.save(model.classifier.state_dict(), classifier_path)
+    # torch.save(model.structure_extractor.state_dict(), s_extractor_path)
+    torch.save(model.color_extractor.state_dict(), c_extractor_path)
+    torch.save(model.structure_classifier.state_dict(), classifier_path)
+    torch.save(model.generator.state_dict(), generator_path)
+    torch.save(dis_model.state_dict(), discriminator_path)
 
     return
 
@@ -95,13 +125,13 @@ def init_target_data(args):
         TargetData = CAVIAR
     elif args.target_dataset == 'VERI':
         TargetData = VERI
-    elif args.target_dataset == 'VRIC':
-        TargetData = VRIC
+    # elif args.target_dataset == 'VRIC':
+    #     TargetData = VRIC
 
 
     target_data = TargetData(mode='train',
                              transform=NormalizeImage(['image', 'rec_image']),
-                             random_crop=args.random_crop,ds_factor=1)
+                             random_crop=args.random_crop,ds_factor=1,im_per_id=1)
 
     target_loader = DataLoader(target_data,
                                batch_size=args.batch_size,
@@ -112,103 +142,75 @@ def init_target_data(args):
     return target_data, target_loader
 
 
-def init_test_data(args):
+# def init_test_data(args):
 
-    if args.target_dataset == 'Duke':
-        TestData = Duke
-    elif args.target_dataset == 'Market':
-        TestData = Market
-    elif args.target_dataset == 'MSMT':
-        TestData = MSMT
-    elif args.target_dataset == 'CUHK':
-        TestData = CUHK
-    elif args.target_dataset == 'VIPER':
-        TestData = VIPER
-    elif args.target_dataset == 'CAVIAR':
-        TestData = CAVIAR
-    elif args.target_dataset == 'VERI':
-        TestData = VERI
-    elif args.target_dataset == 'VRIC':
-        TestData = VRIC
+#     if args.target_dataset == 'Duke':
+#         TestData = Duke
+#     elif args.target_dataset == 'Market':
+#         TestData = Market
+#     elif args.target_dataset == 'MSMT':
+#         TestData = MSMT
+#     elif args.target_dataset == 'CUHK':
+#         TestData = CUHK
+#     elif args.target_dataset == 'VIPER':
+#         TestData = VIPER
+#     elif args.target_dataset == 'CAVIAR':
+#         TestData = CAVIAR
+#     elif args.target_dataset == 'VERI':
+#         TestData = VERI
+#     # elif args.target_dataset == 'VRIC':
+#     #     TestData = VRIC
 
-    test_data = TestData(mode='test',
-                         transform=NormalizeImage(['image']),ds_factor=1,g_gray=False)
+#     test_data = TestData(mode='test',
+#                          transform=NormalizeImage(['image']),ds_factor=1,g_gray=True)
 
-    test_loader = DataLoader(test_data,
-                             batch_size=int(args.batch_size),
-                             num_workers=args.num_workers,
-                             pin_memory=True)
+#     test_loader = DataLoader(test_data,
+#                              batch_size=int(args.batch_size),
+#                              num_workers=args.num_workers,
+#                              pin_memory=True)
 
-    return test_data, test_loader
-
-
-def init_query_data(args):
-
-    if args.target_dataset == 'Duke':
-        QueryData = Duke
-    elif args.target_dataset == 'Market':
-        QueryData = Market
-    elif args.target_dataset == 'MSMT':
-        QueryData = MSMT
-    elif args.target_dataset == 'CUHK':
-        QueryData = CUHK
-    elif args.target_dataset == 'VIPER':
-        QueryData = VIPER
-    elif args.target_dataset == 'CAVIAR':
-        QueryData = CAVIAR
-    elif args.target_dataset == 'VERI':
-        QueryData = VERI
-    elif args.target_dataset == 'VRIC':
-        QueryData = VRIC
+#     return test_data, test_loader
 
 
-    query_data = QueryData(mode='query',
-                           transform=NormalizeImage(['image']),ds_factor=1,q_gray=False)
+# def init_query_data(args):
 
-    query_loader = DataLoader(query_data,
-                              batch_size=int(args.batch_size),
-                              num_workers=args.num_workers,
-                              pin_memory=True)
+#     if args.target_dataset == 'Duke':
+#         QueryData = Duke
+#     elif args.target_dataset == 'Market':
+#         QueryData = Market
+#     elif args.target_dataset == 'MSMT':
+#         QueryData = MSMT
+#     elif args.target_dataset == 'CUHK':
+#         QueryData = CUHK
+#     elif args.target_dataset == 'VIPER':
+#         QueryData = VIPER
+#     elif args.target_dataset == 'CAVIAR':
+#         QueryData = CAVIAR
+#     elif args.target_dataset == 'VERI':
+#         QueryData = VERI
+#     # elif args.target_dataset == 'VRIC':
+#     #     QueryData = VRIC
 
-    return query_data, query_loader
 
+#     query_data = QueryData(mode='query',
+#                            transform=NormalizeImage(['image']),ds_factor=1,q_gray=True)
 
-def init_model_optim(args, model):
-    
-    model_opt = optim.SGD(filter(lambda p: p.requires_grad, model.parameters()),
-                          lr=args.learning_rate,
-                          momentum=args.momentum,
-                          weight_decay=args.weight_decay)
+#     query_loader = DataLoader(query_data,
+#                               batch_size=int(args.batch_size),
+#                               num_workers=args.num_workers,
+#                               pin_memory=True)
 
-    model_opt.zero_grad()
-
-    return model_opt
+#     return query_data, query_loader
 
 """ Parse Arguments """ 
 args, arg_groups = ArgumentParser(mode='train').parse()
 
-# def loss_triplet(global_feature, local_feature, label, normalize=True):
-#     criterion = TripletLoss(margin=config.GLOBAL_MARGIN)
-#     global_loss, pos_inds, neg_inds = GlobalLoss(criterion, 
-#                                                  global_feature,
-#                                                  label.cuda(),
-#                                                  normalize_feature=normalize)
-
-#     criterion = TripletLoss(margin=config.LOCAL_MARGIN)
-#     local_loss = LocalLoss(criterion, 
-#                            local_feature,
-#                            pos_inds,
-#                            neg_inds,
-#                            label.cuda(),
-#                            normalize_feature=normalize)
-
-#     return global_loss, local_loss
-
 def loss_triplet(pred, gt, use_cuda=True):
-    criterion = TripletLoss(margin=config.GLOBAL_MARGIN).cuda()
+    criterion = TripletLoss(margin=None)
+#     criterion = TripletLoss(margin=config.GLOBAL_MARGIN)
 #     criterion = ClassificationLoss(use_cuda=use_cuda)
 #     loss = criterion(pred, gt)
-    loss, prec = criterion(pred, gt.cuda())
+    loss, _, _ = criterion(pred, gt.cuda())
     return loss
 
 def loss_cls(pred, gt, use_cuda=True):
@@ -235,6 +237,8 @@ def main():
 
     """ Initialize Model and Discriminators """
     model = init_model(args)
+
+    model = model.module
     
     dis_params = {'LAMBDA': 0.01,                   # the hyperparameter for the regularization term
                   'activ': 'lrelu',                   # activation function style [relu/lrelu/prelu/selu/tanh]
@@ -249,6 +253,15 @@ def main():
                  }
                   
     dis_model = MsImageDis(3, dis_params, fp16 = False).cuda() # discriminator for domain a
+    
+
+    
+    if args.discriminator_path:
+        print("Loading pre-trained discriminator...")
+        checkpoint = torch.load(args.discriminator_path, map_location=lambda storage, loc: storage)
+
+        for name, param in dis_model.state_dict().items():
+            dis_model.state_dict()[name].copy_(checkpoint[name])
 
 
 
@@ -265,13 +278,6 @@ def main():
 
 
     """ Initialize Optimizers """
-#     model_opt = init_model_optim(args, model)
-    
-#     model_opt = optim.SGD(filter(lambda p: p.requires_grad, model.parameters()),
-#                           lr=args.learning_rate,
-#                           momentum=args.momentum,
-#                           weight_decay=args.weight_decay)
-    
     
     lr_g = 1e-4
     lr_d = 1e-4
@@ -281,6 +287,8 @@ def main():
     weight_decay = 0.0005             
     dis_params = list(dis_model.parameters()) #+ list(self.dis_b.parameters())
     gen_params = list(model.generator.parameters()) #+ list(self.gen_b.parameters())
+
+    # domain_params = list(model.)
     
     dis_b = dis_a = dis_model
 
@@ -293,15 +301,17 @@ def main():
     instancenorm = nn.InstanceNorm2d(512, affine=False)
     
     
-    ignored_params = (list(map(id, model.structure_classifier.parameters()))
-#                     + list(map(id, model.color_classifier.parameters()))
-                    + list(map(id, model.generator.parameters())))
+    ignored_params = (
+                        list(map(id, model.structure_classifier.parameters()))
+                    + list(map(id, model.D_domain.parameters()))
+                    +list(map(id, model.generator.parameters())))
     base_params = filter(lambda p: id(p) not in ignored_params, model.parameters())
     
     lr2 = 2e-3
     model_opt = torch.optim.SGD([
             {'params': base_params, 'lr': lr2},
             {'params': model.structure_classifier.parameters(), 'lr': lr2*10},
+            {'params': model.D_domain.parameters(), 'lr': lr_d*5},
 #             {'params': model.color_classifier.parameters(), 'lr': lr2*10}
             ], weight_decay=weight_decay, momentum=0.9, nesterov=True)
     
@@ -311,8 +321,7 @@ def main():
 #     model_scheduler = get_scheduler(self.model_opt, hyperparameters)
     
     
-    dis_opt.zero_grad()
-    gen_opt.zero_grad()
+    
 #     model_opt.zero_grad()
 
 
@@ -338,11 +347,17 @@ def main():
         local_loss_value = 0
 
         model_opt.zero_grad()
+        dis_opt.zero_grad()
+        gen_opt.zero_grad()
 #        
 
         """ Train Target Data """
         try:
             _, batch = next(target_iter)
+#             print(len(batch['image']))
+            if len(batch['image'])< args.batch_size:
+                target_iter = enumerate(target_loader)
+                _, batch = next(target_iter)
         except:
             target_iter = enumerate(target_loader)
             _, batch = next(target_iter)
@@ -358,38 +373,14 @@ def main():
         """ Model Return """
 #         target_dict = model(image)
         
-        x_ab, x_ba, s_a, s_b, f_a, f_b, p_a, p_b, pp_a, pp_b, x_a_recon, x_b_recon, x_a_recon_p, x_b_recon_p = model(images_a, images_b, pos_a, pos_b)
+        # x_ab, x_ba, c_a, c_b, f_a, f_b, p_a, p_b, pp_a, pp_b, x_a_recon, x_b_recon, x_a_recon_p, x_b_recon_p = model(images_a, images_b, pos_a, pos_b)
+        x_ab, x_ba, s_a, s_b, c_a, c_b, p_a, p_b, pp_a, pp_b, x_a_recon, x_b_recon, x_a_recon_p, x_b_recon_p, sp_a, sp_b, ssp_a, ssp_b, sc_a, sc_b\
+             = model(images_a, images_b, pos_a, pos_b)
         
         
 #         print(target_dict['cls_vector'].data.cpu().numpy().shape)
 
         """ Target Training Loss """
-#         loss = 0
-#         if args.cls_loss:
-#             cls_loss = loss_cls(pred=target_dict['cls_vector'], 
-#                                 gt=label, 
-#                                 use_cuda=True)
-
-#             cls_loss_value += cls_loss.data.cpu().numpy() / args.iter_size
-#             loss += args.w_cls * cls_loss
-
-#         if args.triplet_loss:
-# #             global_loss, local_loss = loss_triplet(global_feature=target_dict['global_feature'],
-# #                                                    local_feature=target_dict['local_feature'],
-# #                                                    label=label)
-#             global_loss = loss_triplet(pred=target_dict['global_feature'],gt=label)
-
-#             global_loss_value += global_loss.data.cpu().numpy() / args.iter_size
-# #             local_loss_value += local_loss.data.cpu().numpy() / args.iter_size
-
-#             loss += args.w_global * global_loss
-# #             loss += args.w_local * local_loss
-
-
-#         loss = loss / args.iter_size
-#         loss.backward()
-        
-#         model_opt.step()
         
         hyperparameters = {
             'recon_s_w': 0,                     # the initial weight for structure code reconstruction
@@ -419,20 +410,20 @@ def main():
 #Update Generator
 ##########################################################################################################################################
 
-# def gen_update(self, x_ab, x_ba, s_a, s_b, f_a, f_b, p_a, p_b, pp_a, pp_b, x_a_recon, x_b_recon, x_a_recon_p, x_b_recon_p, x_a, x_b, xp_a, xp_b, l_a, l_b, hyperparameters, iteration, num_gpu):
         # ppa, ppb is the same person
-        gen_opt.zero_grad()
-        model_opt.zero_grad() #?
         
         gen_a = gen_b = model.generator
-        id_a = id_b = model.structure_extractor
+        # id_a = id_b = model.color_extractor
+        color_a = color_b = model.color_extractor
+        # id_a = id_b = model.structure_extractor
+
         # no gradient
         x_ba_copy = Variable(x_ba.data, requires_grad=False)
         x_ab_copy = Variable(x_ab.data, requires_grad=False)
 
         rand_num = random.uniform(0,1)
         #################################
-        # encode structure
+        #encode structure
         if hyperparameters['use_encoder_again']>=rand_num:
             # encode again (encoder is tuned, input is fixed)
             s_a_recon = gen_b.enc_content(x_ab_copy)
@@ -444,25 +435,40 @@ def main():
             # encode again (encoder is fixed, input is tuned)
             s_a_recon = enc_content_copy(x_ab)
             s_b_recon = enc_content_copy(x_ba)
+        
+        #encode structure
+        # if hyperparameters['use_encoder_again']>=rand_num:
+        #     # encode again (encoder is tuned, input is fixed)
+        #     c_a_recon, _, _ = model.color_extractor(x_ab_copy)
+        #     c_b_recon, _, _ = model.color_extractor(x_ba_copy)
+        # else:
+        #     # copy the encoder
+        #     enc_content_copy = copy.deepcopy(model.color_extractor)
+        #     enc_content_copy = enc_content_copy.eval()
+        #     # encode again (encoder is fixed, input is tuned)
+        #     c_a_recon, _, _ = enc_content_copy(x_ab)
+        #     c_b_recon, _, _ = enc_content_copy(x_ba)
 
         #################################
+
+
         # encode appearance
-        id_a_copy = copy.deepcopy(id_a)
-        id_a_copy = id_a_copy.eval()
+        color_a_copy = copy.deepcopy(color_a)
+        color_a_copy = color_a_copy.eval()
         if hyperparameters['train_bn']:
-            id_a_copy = id_a_copy.apply(train_bn)
-        id_b_copy = id_a_copy
+            color_a_copy = color_a_copy.apply(train_bn)
+        color_b_copy = color_a_copy
         
         # encode again (encoder is fixed, input is tuned)
-        f_a_recon, p_a_recon = id_a_copy(to_grays(x_ba))
-        f_b_recon, p_b_recon = id_b_copy(to_grays(x_ab))
-      
-        p_a_recon = model.structure_classifier(p_a_recon)
-        p_b_recon = model.structure_classifier(p_b_recon)
+        c_a_recon, p_a_recon, ff_a_recon = color_a_copy((x_ba))
+        c_b_recon, p_b_recon, ff_b_recon = color_b_copy((x_ab))
+    
+        # p_a_recon = model.structure_classifier(p_a_recon)
+        # p_b_recon = model.structure_classifier(p_b_recon)
 
-#         # teacher Loss
-#         #  Tune the ID model
-#         log_sm = nn.LogSoftmax(dim=1)
+        # import pdb
+        # pdb.set_trace()
+        
 
         # auto-encoder image reconstruction
         x_a = images_a
@@ -475,20 +481,53 @@ def main():
         # feature reconstruction
         loss_gen_recon_s_a = recon_criterion(s_a_recon, s_a) if hyperparameters['recon_s_w'] > 0 else 0
         loss_gen_recon_s_b = recon_criterion(s_b_recon, s_b) if hyperparameters['recon_s_w'] > 0 else 0
-        loss_gen_recon_f_a = recon_criterion(f_a_recon, f_a) if hyperparameters['recon_f_w'] > 0 else 0
-        loss_gen_recon_f_b = recon_criterion(f_b_recon, f_b) if hyperparameters['recon_f_w'] > 0 else 0
+        loss_gen_recon_c_a = recon_criterion(c_a_recon, c_a) if hyperparameters['recon_f_w'] > 0 else 0
+        loss_gen_recon_c_b = recon_criterion(c_b_recon, c_b) if hyperparameters['recon_f_w'] > 0 else 0
 
-        x_aba = gen_a.decode(s_a_recon, f_a_recon) if hyperparameters['recon_x_cyc_w'] > 0 else None
-        x_bab = gen_b.decode(s_b_recon, f_b_recon) if hyperparameters['recon_x_cyc_w'] > 0 else None
+        x_aba = gen_a.decode(s_a_recon, c_a_recon) if hyperparameters['recon_x_cyc_w'] > 0 else None
+        x_bab = gen_b.decode(s_b_recon, c_b_recon) if hyperparameters['recon_x_cyc_w'] > 0 else None
 
         # ID loss AND Tune the Generated image
         
-        loss_id = id_criterion(p_a, l_a) + id_criterion(p_b, l_b)
+        # loss_id = id_criterion(p_a, l_a) + id_criterion(p_b, l_b)
         
-        loss_pid = id_criterion(pp_a, l_a) + id_criterion(pp_b, l_b)
+        # loss_pid = id_criterion(pp_a, l_a) + id_criterion(pp_b, l_b)
         
-        loss_gen_recon_id = id_criterion(p_a_recon, l_a) + id_criterion(p_b_recon, l_b)
+        # loss_gen_recon_id = id_criterion(p_a_recon, l_a) + id_criterion(p_b_recon, l_b)
+
+        sp_a_recon = model.structure_classifier(s_a_recon)
+        sp_b_recon = model.structure_classifier(s_b_recon)
+
+        loss_id = id_criterion(sp_a, l_a) + id_criterion(sp_b, l_b) + id_criterion(p_a, l_a) + id_criterion(p_b, l_b)
         
+        loss_pid = id_criterion(ssp_a, l_a) + id_criterion(ssp_b, l_b) + id_criterion(pp_a, l_a) + id_criterion(pp_b, l_b)
+        
+        loss_gen_recon_id = id_criterion(sp_a_recon, l_a) + id_criterion(sp_b_recon, l_b) + id_criterion(p_a_recon, l_a) + id_criterion(p_b_recon, l_b)
+
+        loss_tri = loss_triplet(sp_a, l_a) + loss_triplet(sp_b, l_b)
+
+        loss_ptri = loss_triplet(ssp_a, l_a) + loss_triplet(ssp_b, l_b)
+
+
+
+        #################### Adversarial learning with GRL #####################
+        source_label = 0 # color
+        target_label = 1 # gray
+
+        # import pdb
+        # pdb.set_trace()
+
+        features_s = grad_reverse(torch.cat([sc_a,sc_b]))
+        D_img_out_s = model.D_domain(features_s)
+        loss_D_img_s = F.binary_cross_entropy_with_logits(D_img_out_s, torch.FloatTensor(D_img_out_s.data.size()).fill_(source_label).cuda())
+
+        features_t = grad_reverse(torch.cat([s_a,s_b]))
+        # features_t = grad_reverse(features_t['p2'])
+        D_img_out_t = model.D_domain(features_t)
+        loss_D_img_t = F.binary_cross_entropy_with_logits(D_img_out_t, torch.FloatTensor(D_img_out_t.data.size()).fill_(target_label).cuda())
+
+
+        ####################
       
         #print(f_a_recon, f_a)
         loss_gen_cycrecon_x_a = recon_criterion(x_aba, x_a) if hyperparameters['recon_x_cyc_w'] > 0 else 0
@@ -520,17 +559,21 @@ def main():
                               hyperparameters['gan_w'] * loss_gen_adv_b + \
                               hyperparameters['recon_x_w'] * loss_gen_recon_x_a + \
                               hyperparameters['recon_xp_w'] * loss_gen_recon_xp_a + \
-                              hyperparameters['recon_f_w'] * loss_gen_recon_f_a + \
+                              hyperparameters['recon_f_w'] * loss_gen_recon_c_a + \
                               hyperparameters['recon_s_w'] * loss_gen_recon_s_a + \
                               hyperparameters['recon_x_w'] * loss_gen_recon_x_b + \
                               hyperparameters['recon_xp_w'] * loss_gen_recon_xp_b + \
-                              hyperparameters['recon_f_w'] * loss_gen_recon_f_b + \
+                              hyperparameters['recon_f_w'] * loss_gen_recon_c_b + \
                               hyperparameters['recon_s_w'] * loss_gen_recon_s_b + \
                               hyperparameters['recon_x_cyc_w'] * loss_gen_cycrecon_x_a + \
                               hyperparameters['recon_x_cyc_w'] * loss_gen_cycrecon_x_b + \
                               hyperparameters['id_w'] * loss_id + \
                               hyperparameters['pid_w'] * loss_pid + \
-                              hyperparameters['recon_id_w'] * loss_gen_recon_id
+                              hyperparameters['id_w'] * loss_tri + \
+                              hyperparameters['pid_w'] * loss_ptri + \
+                              hyperparameters['recon_id_w'] * loss_gen_recon_id + \
+                              hyperparameters['gan_w'] * loss_D_img_s + \
+                              hyperparameters['gan_w'] * loss_D_img_t
 #                               hyperparameters['vgg_w'] * self.loss_gen_vgg_a + \
 #                               hyperparameters['vgg_w'] * self.loss_gen_vgg_b + \
 #                               hyperparameters['teacher_w'] * self.loss_teacher
@@ -539,19 +582,38 @@ def main():
         gen_opt.step()
         model_opt.step()
         
-        print("L_total:{:.4f}, L_gan:{:.4f}, Lx:{:.4f}, Lxp:{:.4f}, Lrecycle:{:.4f}, Lf:{:.4f}, Ls:{:.4f}, Recon-id:{:.4f}, id:{:.4f}, pid:{:.4f}".format(loss_gen_total, \
+        print("{:6d}/{:6d}| L_total:{:.4f}, L_gan:{:.4f}, Lx:{:.4f}, Lxp:{:.4f}, Lrecycle:{:.4f}, Lf:{:.4f}, Ls:{:.4f}, Recon-id:{:.4f}, id:{:.4f}, pid:{:.4f}, triID:{:.4f}, triPID:{:.4f}, Domain:{:.4f}".format(step+1, args.num_steps,loss_gen_total, \
               hyperparameters['gan_w'] * (loss_gen_adv_a + loss_gen_adv_b), \
               hyperparameters['recon_x_w'] * (loss_gen_recon_x_a + loss_gen_recon_x_b), \
               hyperparameters['recon_xp_w'] * (loss_gen_recon_xp_a + loss_gen_recon_xp_b), \
               hyperparameters['recon_x_cyc_w'] * (loss_gen_cycrecon_x_a + loss_gen_cycrecon_x_b), \
-              hyperparameters['recon_f_w'] * (loss_gen_recon_f_a + loss_gen_recon_f_b), \
+              hyperparameters['recon_f_w'] * (loss_gen_recon_c_a + loss_gen_recon_c_b), \
               hyperparameters['recon_s_w'] * (loss_gen_recon_s_a + loss_gen_recon_s_b), \
-              hyperparameters['recon_id_w'] * loss_gen_recon_id/2, \
-              hyperparameters['id_w'] * loss_id/2,\
-              hyperparameters['pid_w'] * loss_pid/2))
-        #Write scalar out to TB:
-        #Write images out to TB: x_a, x_a_recon, x_aba, x_ab1, x_b, x_b_recon, x_bab, x_ba1
+              hyperparameters['recon_id_w'] * loss_gen_recon_id/4, \
+              hyperparameters['id_w'] * loss_id/4,\
+              hyperparameters['pid_w'] * loss_pid/4,\
+              hyperparameters['id_w'] * loss_tri/2,\
+              hyperparameters['pid_w'] * loss_ptri/2,\
+              hyperparameters['gan_w'] * (loss_D_img_t+loss_D_img_s)))
         
+        #Write images out to TB: x_a, x_a_recon, x_aba, x_ab1, x_b, x_b_recon, x_bab, x_ba1
+        """ Visualize Generated Target Image """
+        if (step+1) % args.image_steps == 0:
+#             save_model(args, model, D_resolution, D_ACGAN=D_ACGAN) # To save model
+
+            writer.add_image('x1 input', make_grid(tensor2ims(x_a.detach()), nrow=16), step+1)
+            writer.add_image('x2 input', make_grid(tensor2ims(x_b.detach()), nrow=16), step+1)
+            writer.add_image('pos1 input', make_grid(tensor2ims(pos_a.detach()), nrow=16), step+1)
+            writer.add_image('pos2 input', make_grid(tensor2ims(pos_b.detach()), nrow=16), step+1)
+            writer.add_image('x12', make_grid(tensor2ims(x_ab.detach()), nrow=16), step+1)
+            writer.add_image('x21', make_grid(tensor2ims(x_ba.detach()), nrow=16), step+1)
+            writer.add_image('x1_recon', make_grid(tensor2ims(x_a_recon.detach()), nrow=16), step+1)
+            writer.add_image('x2_recon', make_grid(tensor2ims(x_b_recon.detach()), nrow=16), step+1)
+            writer.add_image('x1_recon_p', make_grid(tensor2ims(x_a_recon_p.detach()), nrow=16), step+1)
+            writer.add_image('x2_recon_p', make_grid(tensor2ims(x_b_recon_p.detach()), nrow=16), step+1)
+#             writer.add_image('x121', make_grid(tensor2ims(x_aba.detach()), nrow=16), step+1)
+#             writer.add_image('x212', make_grid(tensor2ims(x_bab.detach()), nrow=16), step+1)
+            
 ##########################################################################################################################################
 #Update Discriminator
 ##########################################################################################################################################
@@ -579,36 +641,39 @@ def main():
         writer.add_scalar('Rec x Loss', hyperparameters['recon_x_w'] * (loss_gen_recon_x_a + loss_gen_recon_x_b), step+1)
         writer.add_scalar('Rec xp Loss', hyperparameters['recon_xp_w'] * (loss_gen_recon_xp_a + loss_gen_recon_xp_b), step+1)
         writer.add_scalar('Rec xcycle Loss', hyperparameters['recon_x_cyc_w'] * (loss_gen_cycrecon_x_a + loss_gen_cycrecon_x_b), step+1)
-        writer.add_scalar('Rec f Loss', hyperparameters['recon_f_w'] * (loss_gen_recon_f_a + loss_gen_recon_f_b), step+1)
+        writer.add_scalar('Rec f Loss', hyperparameters['recon_f_w'] * (loss_gen_recon_c_a + loss_gen_recon_c_b), step+1)
         writer.add_scalar('Rec s Loss', hyperparameters['recon_s_w'] * (loss_gen_recon_s_a + loss_gen_recon_s_b), step+1)
         writer.add_scalar('Rec id Loss', hyperparameters['recon_id_w'] * loss_gen_recon_id/2, step+1)
-        writer.add_scalar('ID Loss', hyperparameters['id_w'] * loss_id/2, step+1)
-        writer.add_scalar('PID Loss', hyperparameters['pid_w'] * loss_pid/2, step+1)
+        writer.add_scalar('ID Loss', hyperparameters['id_w'] * loss_id/4, step+1)
+        writer.add_scalar('PID Loss', hyperparameters['pid_w'] * loss_pid/4, step+1)
+        writer.add_scalar('Tri Loss', hyperparameters['id_w'] * loss_tri/2, step+1)
+        writer.add_scalar('PTri Loss', hyperparameters['pid_w'] * loss_ptri/2, step+1)
         
-        
-        if (step+1) % args.eval_steps == 0:
-            print('Start evaluation...')
+        # import pdb
+        # pdb.set_trace()
+        # if (step+1) % args.eval_steps == 0:
+        #     print('Start evaluation...')
  
-            model.eval()
-            #rank1 = eval_metric(args, model, test_loader, query_loader)
-            mAP, cmc, _, _ = eval_metric(args, model, test_loader, query_loader, re_rank=False)
-            rank1, rank5, rank10, rank20 = cmc[[0,4,9,19]]
+        #     model.eval()
+        #     #rank1 = eval_metric(args, model, test_loader, query_loader)
+        #     mAP, cmc, _, _ = eval_metric(args, model, test_loader, query_loader, re_rank=False)
+        #     rank1, rank5, rank10, rank20 = cmc[[0,4,9,19]]
             
-            writer.add_scalar('Rank 1', rank1, (step+1)/args.eval_steps)
-            writer.add_scalar('Rank 5', rank5, (step+1)/args.eval_steps)
-            writer.add_scalar('Rank 10', rank10, (step+1)/args.eval_steps)
-            writer.add_scalar('Rank 20', rank20, (step+1)/args.eval_steps)
-            writer.add_scalar('mAP', mAP, (step+1)/args.eval_steps)
+        #     writer.add_scalar('Rank 1', rank1, (step+1)/args.eval_steps)
+        #     writer.add_scalar('Rank 5', rank5, (step+1)/args.eval_steps)
+        #     writer.add_scalar('Rank 10', rank10, (step+1)/args.eval_steps)
+        #     writer.add_scalar('Rank 20', rank20, (step+1)/args.eval_steps)
+        #     writer.add_scalar('mAP', mAP, (step+1)/args.eval_steps)
 
-            if rank1 >= best_rank1:
-                best_rank1 = rank1
-                print('Saving model...')
-                save_model(args, model) # To save model
-                writer.add_scalar('Best Rank 1', best_rank1, (step+1)/args.eval_steps)
+        #     if rank1 >= best_rank1:
+        #         best_rank1 = rank1
+        #         print('Saving model...')
+        #         save_model(args, model, dis_model) # To save model
+        #         writer.add_scalar('Best Rank 1', best_rank1, (step+1)/args.eval_steps)
 
-            print('Rank:', rank1, rank5, rank10, rank20)
-            print('mAP:', mAP)
-            print('Best rank1:', best_rank1)
+        #     print('Rank:', rank1, rank5, rank10, rank20)
+        #     print('mAP:', mAP)
+        #     print('Best rank1:', best_rank1)
 
 
 if __name__ == '__main__':

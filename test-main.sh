@@ -1,17 +1,15 @@
-rm -rf runs
-
 MODEL_DIR=trained_models
 NUM_WORKERS=2
 GPU=1
 
-BATCH_SIZE=8
-LEARNING_RATE=0.0001
+BATCH_SIZE=16
+LEARNING_RATE=0.001
 MOMENTUM=0.9
 WEIGHT_DECAY=0.0005
 
 NUM_STEPS=250000
 ITER_SIZE=1
-EVAL_STEPS=2000
+EVAL_STEPS=500
 IMAGE_STEPS=50
 
 SOURCE_DATASET=Market
@@ -19,14 +17,13 @@ TARGET_DATASET=Market
 
 # PRETRAINED_DIR=/home/yujheli/Project/ycchen/pretrained/$SOURCE_DATASET/down_1_2/multi
 PRETRAINED_DIR=trained_models
-
+DECODER_PATH=$PRETRAINED_DIR/Decoder_${SOURCE_DATASET}.pth.tar
 #EXTRACTOR_PATH=/home/yujheli/Project/ycchen/pretrained/Market/Extractor_Market_pretrain.pth.tar
-# EXTRACTOR_PATH=$1/Extractor_${SOURCE_DATASET}.pth.tar
-# CLASSIFIER_PATH=$1/Classifier_${SOURCE_DATASET}.pth.tar
-EXTRACTOR_PATH=$PRETRAINED_DIR/Extractor_${SOURCE_DATASET}.pth.tar
+VAR_PATH=$PRETRAINED_DIR/Var_${SOURCE_DATASET}.pth.tar
+ACGAN_PATH=$PRETRAINED_DIR/ACGAN_${SOURCE_DATASET}.pth.tar
+EXTRACTOR_PATH=$1
 CLASSIFIER_PATH=$PRETRAINED_DIR/Classifier_${SOURCE_DATASET}.pth.tar
-DISCRIMINATOR_PATH=$PRETRAINED_DIR/Discriminator_${SOURCE_DATASET}.pth.tar
-GENERATOR_PATH=$PRETRAINED_DIR/Generator_${SOURCE_DATASET}.pth.tar
+DISCRIMINATOR_PATH=$PRETRAINED_DIR/D1_${SOURCE_DATASET}.pth.tar
 
 RANDOM_CROP=False
 
@@ -34,7 +31,7 @@ REC_LOSS=True
 CLS_LOSS=True
 ADV_LOSS=True
 DIS_LOSS=True
-TRIPLET_LOSS=True
+TRIPLET_LOSS=False
 ACGAN_CLS_LOSS=True
 ACGAN_ADV_LOSS=True
 ACGAN_DIS_LOSS=True
@@ -56,7 +53,7 @@ W_KL=1
 W_GP=1
 W_DIFF=10
 
-CUDA_LAUNCH_BLOCKING=1 CUDA_VISIBLE_DEVICES=1 python3 train-main.py --model-dir $MODEL_DIR \
+CUDA_LAUNCH_BLOCKING=1 python3 test-main.py --model-dir $MODEL_DIR \
                      --num-workers $NUM_WORKERS \
                      --source-dataset $SOURCE_DATASET \
                      --target-dataset $TARGET_DATASET \
@@ -68,7 +65,7 @@ CUDA_LAUNCH_BLOCKING=1 CUDA_VISIBLE_DEVICES=1 python3 train-main.py --model-dir 
                      --momentum $MOMENTUM \
                      --weight-decay $WEIGHT_DECAY \
                      --iter-size $ITER_SIZE \
-                    #  --gpu $GPU \
+                     --gpu $GPU \
                      --cls-loss $CLS_LOSS \
                      --acgan-cls-loss $ACGAN_CLS_LOSS \
                      --rec-loss $REC_LOSS \
@@ -92,8 +89,10 @@ CUDA_LAUNCH_BLOCKING=1 CUDA_VISIBLE_DEVICES=1 python3 train-main.py --model-dir 
                      --w-local $W_LOCAL \
                      --w-gp $W_GP \
                      --w-diff $W_DIFF \
-#                      --extractor-path $EXTRACTOR_PATH \
+                     --extractor-path $EXTRACTOR_PATH \
 #                      --classifier-path $CLASSIFIER_PATH \
+#                      --var-path $VAR_PATH \
 #                      --discriminator-path $DISCRIMINATOR_PATH\
-#                      --generator-path $GENERATOR_PATH \
+#                      --decoder-path $DECODER_PATH \
+#                      --acgan-path $ACGAN_PATH \
 

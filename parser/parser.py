@@ -19,6 +19,7 @@ class ArgumentParser():
         base_params.add_argument('--model-path', type=str, default='', help='Pre-trained model path')
         base_params.add_argument('--extractor-path', type=str, default='', help='Pre-trained extractor path')
         base_params.add_argument('--decoder-path', type=str, default='', help='Pre-trained decoder path')
+        base_params.add_argument('--generator-path', type=str, default='', help='Pre-trained generator path')
         base_params.add_argument('--classifier-path', type=str, default='', help='Pre-trained classifier path')
         base_params.add_argument('--discriminator-path', type=str, default='', help='Pre-trained discriminator path')
         base_params.add_argument('--var-path', type=str, default='', help='Pre-trained var path')
