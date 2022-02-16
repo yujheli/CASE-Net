@@ -34,16 +34,21 @@ def to_grays(x):
     std = np.array(config.STDDEV)
     for i in range(x.size(0)):
         xx = recover(x[i,:,:,:])   # 3 channel, 256x128x3
-        xx = cv2.cvtColor(xx, cv2.COLOR_RGB2GRAY) # 256x128x1
+        gray = cv2.cvtColor(xx, cv2.COLOR_RGB2GRAY) # 256x128x1
+        img2 = np.zeros_like(xx)
+        img2[:,:,0] = gray
+        img2[:,:,1] = gray
+        img2[:,:,2] = gray
 #         xx = cv2.Canny(xx, 10, 200) #256x128
-        xx = xx/255.0 - 0.5 # {-0.5,0.5}
+#         xx = xx/255.0 - 0.5 # {-0.5,0.5}
 #         xx = xx/255.0
 #         xx = (xx-mean)/std
 #         xx += np.random.randn(xx.shape[0],xx.shape[1])*0.1  #add random noise
-        xx = torch.from_numpy(xx.astype(np.float32))
-        out[i,0,:,:] = xx
-        out[i,1,:,:] = xx
-        out[i,2,:,:] = xx
+        img2 = (img2-mean)/std/255.
+        xx = torch.from_numpy(img2.transpose((2,0,1)).astype(np.float32))
+        out[i,:,:,:] = xx
+#         out[i,1,:,:] = xx
+#         out[i,2,:,:] = xx
 #     out = out.unsqueeze(1) 
     return out.cuda()
     
@@ -88,7 +93,7 @@ class Market(Dataset):
                  csv_path=config.MARKET_CSV_DIR,
                  image_size=(config.IMAGE_HEIGHT, config.IMAGE_WIDTH),
                  transform=None,
-                 random_crop=True,
+                 random_crop=False,
                  im_per_id=4,ds_factor=4, q_gray=False, g_gray=False, train_gray_p=0): 
 
         self.image_height, self.image_width = image_size
@@ -175,7 +180,7 @@ class Market(Dataset):
             inds = self.hash_table[idx]
             
             if len(inds) < self.im_per_id:
-                inds = np.random.choice(inds, self.im_per_id, replace=False)
+                inds = np.random.choice(inds, self.im_per_id, replace=True)
             else:
                 inds = np.random.choice(inds, self.im_per_id, replace=False)
 
@@ -193,6 +198,14 @@ class Market(Dataset):
             label = Variable(torch.from_numpy(np.array([idx] * self.im_per_id, dtype='int32')).long())
             
             #================================================================================================
+            inds = self.hash_table[idx]
+            
+            if len(inds) < self.im_per_id:
+                inds = np.random.choice(inds, self.im_per_id, replace=True)
+            else:
+                inds = np.random.choice(inds, self.im_per_id, replace=False)
+            
+            
             input_pos_list = []
             for id_ in inds:
                 input_image, rec_image = self.get_image(self.image_names, id_)
