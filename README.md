@@ -1,3 +1,4 @@
+![Python 3](https://img.shields.io/badge/python-3-green.svg) 
 # Learning Shape Representations for Person Re-Identification under Clothing Change
 This repository contains codes for WACV2021 CASE-Net
 
