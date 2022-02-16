@@ -8,7 +8,90 @@ import numpy as np
 import config
 import torch.nn.init as init
 import cv2
+from .discriminator import *
 
+############### Image discriminator ##############
+class FCDiscriminator_img(nn.Module):
+    def __init__(self, num_classes, ndf1=256, ndf2=128):
+        super(FCDiscriminator_img, self).__init__()
+
+        self.conv1 = nn.Conv2d(num_classes, ndf1, kernel_size=3, padding=1)
+        self.conv2 = nn.Conv2d(ndf1, ndf2, kernel_size=3, padding=1)
+        self.conv3 = nn.Conv2d(ndf2, ndf2, kernel_size=3, padding=1)
+        self.classifier = nn.Conv2d(ndf2, 1, kernel_size=3, padding=1)
+
+        self.leaky_relu = nn.LeakyReLU(negative_slope=0.2, inplace=True)
+
+    def forward(self, x):
+        x = self.conv1(x)
+        x = self.leaky_relu(x)
+        x = self.conv2(x)
+        x = self.leaky_relu(x)
+        x = self.conv3(x)
+        x = self.leaky_relu(x)
+        x = self.classifier(x)
+        return x
+#################################
+
+
+################ Gradient reverse function
+class GradReverse(torch.autograd.Function):
+    @staticmethod
+    def forward(ctx, x):
+        return x.view_as(x)
+
+    @staticmethod
+    def backward(ctx, grad_output):
+        return grad_output.neg()
+
+def grad_reverse(x):
+    return GradReverse.apply(x)
+
+
+class BNClassifier(nn.Module):
+
+    def __init__(self, in_dim, class_num):
+        super(BNClassifier, self).__init__()
+
+        self.in_dim = in_dim
+        self.class_num = class_num
+
+        self.bn = nn.BatchNorm1d(self.in_dim)
+        self.bn.bias.requires_grad_(False)
+        self.classifier = nn.Linear(self.in_dim, self.class_num, bias=False)
+
+        self.bn.apply(weights_init_kaiming)
+        self.classifier.apply(weights_init_classifier)
+
+    def forward(self, x):
+        feature = self.bn(x)
+        cls_score = self.classifier(feature)
+        return feature, cls_score
+#         return cls_score
+    
+
+def weights_init_kaiming(m):
+    classname = m.__class__.__name__
+    if classname.find('Linear') != -1:
+        nn.init.kaiming_normal_(m.weight, a=0, mode='fan_out')
+        nn.init.constant_(m.bias, 0.0)
+    elif classname.find('Conv') != -1:
+        nn.init.kaiming_normal_(m.weight, a=0, mode='fan_in')
+        if m.bias is not None:
+            nn.init.constant_(m.bias, 0.0)
+    elif classname.find('BatchNorm') != -1:
+        if m.affine:
+            nn.init.constant_(m.weight, 1.0)
+            nn.init.constant_(m.bias, 0.0)
+
+
+def weights_init_classifier(m):
+    classname = m.__class__.__name__
+    if classname.find('Linear') != -1:
+        nn.init.normal_(m.weight, std=0.001)
+        if m.bias:
+            nn.init.constant_(m.bias, 0.0)
+            
 def weights_init(init_type='gaussian'):
     def init_fun(m):
         classname = m.__class__.__name__
@@ -41,6 +124,25 @@ def recover(inp):
     inp = inp.astype(np.uint8)
     return inp
 
+# def to_grays(x):
+#     x = x.data.cpu()
+#     out = torch.FloatTensor(x.size(0), x.size(1), x.size(2), x.size(3))
+#     mean = np.array(config.MEAN)
+#     std = np.array(config.STDDEV)
+#     for i in range(x.size(0)):
+#         xx = recover(x[i,:,:,:])   # 3 channel, 256x128x3
+#         xx = cv2.cvtColor(xx, cv2.COLOR_RGB2GRAY) # 256x128x1
+# #         xx = cv2.Canny(xx, 10, 200) #256x128
+#         xx = xx/255.0 - 0.5 # {-0.5,0.5}
+# #         xx = xx/255.0
+# #         xx += np.random.randn(xx.shape[0],xx.shape[1])*0.1  #add random noise
+#         xx = torch.from_numpy(xx.astype(np.float32))
+#         out[i,0,:,:] = xx
+#         out[i,1,:,:] = xx
+#         out[i,2,:,:] = xx
+# #     out = out.unsqueeze(1) 
+#     return out.cuda()
+
 def to_grays(x):
     x = x.data.cpu()
     out = torch.FloatTensor(x.size(0), x.size(1), x.size(2), x.size(3))
@@ -48,17 +150,49 @@ def to_grays(x):
     std = np.array(config.STDDEV)
     for i in range(x.size(0)):
         xx = recover(x[i,:,:,:])   # 3 channel, 256x128x3
-        xx = cv2.cvtColor(xx, cv2.COLOR_RGB2GRAY) # 256x128x1
+        gray = cv2.cvtColor(xx, cv2.COLOR_RGB2GRAY) # 256x128x1
+        img2 = np.zeros_like(xx)
+        img2[:,:,0] = gray
+        img2[:,:,1] = gray
+        img2[:,:,2] = gray
 #         xx = cv2.Canny(xx, 10, 200) #256x128
-        xx = xx/255.0 - 0.5 # {-0.5,0.5}
+#         xx = xx/255.0 - 0.5 # {-0.5,0.5}
 #         xx = xx/255.0
+#         xx = (xx-mean)/std
 #         xx += np.random.randn(xx.shape[0],xx.shape[1])*0.1  #add random noise
-        xx = torch.from_numpy(xx.astype(np.float32))
-        out[i,0,:,:] = xx
-        out[i,1,:,:] = xx
-        out[i,2,:,:] = xx
+        img2 = (img2-mean)/std/255.
+        xx = torch.from_numpy(img2.transpose((2,0,1)).astype(np.float32))
+        out[i,:,:,:] = xx
+#         out[i,1,:,:] = xx
+#         out[i,2,:,:] = xx
 #     out = out.unsqueeze(1) 
     return out.cuda()
+
+class ClassBlock(nn.Module):
+    def __init__(self, input_dim, class_num, droprate=0.5, relu=False, num_bottleneck=512):
+        super(ClassBlock, self).__init__()
+        add_block = []
+        add_block += [nn.Linear(input_dim, num_bottleneck)] 
+        #num_bottleneck = input_dim # We remove the input_dim
+        add_block += [nn.BatchNorm1d(num_bottleneck, affine=True)]
+        if relu:
+            add_block += [nn.LeakyReLU(0.1)]
+        if droprate>0:
+            add_block += [nn.Dropout(p=droprate)]
+        add_block = nn.Sequential(*add_block)
+        add_block.apply(weights_init_kaiming)
+
+        classifier = []
+        classifier += [nn.Linear(num_bottleneck, class_num)]
+        classifier = nn.Sequential(*classifier)
+        classifier.apply(weights_init_classifier)
+
+        self.add_block = add_block
+        self.classifier = classifier
+    def forward(self, x):
+        x = self.add_block(x)
+        x = self.classifier(x)
+        return x
 
 class MsImageDis(nn.Module):
     # Multi-scale discriminator architecture
@@ -203,23 +337,7 @@ class MsImageDis(nn.Module):
         assert(grad_dout2.size() == x_in.size())
         reg = grad_dout2.view(batch_size, -1).sum(1)
         return reg
-    
-def weights_init_kaiming(m):
-    classname = m.__class__.__name__
-    if classname.find('Conv') != -1:
-        init.kaiming_normal_(m.weight.data, a=0, mode='fan_in')
-    elif classname.find('Linear') != -1:
-        init.kaiming_normal_(m.weight.data, a=0, mode='fan_out')
-        init.constant_(m.bias.data, 0.0)
-    elif classname.find('InstanceNorm1d') != -1:
-        init.normal_(m.weight.data, 1.0, 0.02)
-        init.constant_(m.bias.data, 0.0)
 
-def weights_init_classifier(m):
-    classname = m.__class__.__name__
-    if classname.find('Linear') != -1:
-        init.normal_(m.weight.data, std=0.001)
-        init.constant_(m.bias.data, 0.0)
 
 def to_gray(half=False): #simple
     def forward(x):
@@ -242,8 +360,159 @@ def to_edge(x):
         out[i,:,:] = xx
     out = out.unsqueeze(1) 
     return out.cuda()
+
+class Strong_ReID(nn.Module):
+
+    def __init__(self, 
+                 backbone='resnet-101',
+                 skip_connection=config.SKIP_CONNECTION,
+                 classifier_input_dim=2048,
+                 classifier_output_dim=config.DUKE_CLASS_NUM,
+                 use_cuda=True,
+                 local_conv_out_channels=128):
+        super(Strong_ReID, self).__init__()
+
+        self.class_num = classifier_output_dim
+
+        # backbone and optimize its architecture
+        resnet = models.resnet50(pretrained=True)
+        resnet.layer4[0].conv2.stride = (1,1)
+        resnet.layer4[0].downsample[0].stride = (1,1)
+
+        # cnn backbone
+        self.resnet_conv = nn.Sequential(
+            resnet.conv1, resnet.bn1, resnet.maxpool, # no relu
+            resnet.layer1, resnet.layer2, resnet.layer3, resnet.layer4)
+        self.gap = nn.AdaptiveAvgPool2d(1)
+
+        # classifier
+        self.classifier = BNClassifier(2048, self.class_num)
+
+    def forward(self, x):
+
+        features = self.gap(self.resnet_conv(x)).squeeze()
+        bned_features, cls_score = self.classifier(features)
+
+#         if self.training:
+#             return features, cls_score
+#         else:
+#             return bned_features
         
+        return_dict = {'cls_vector': cls_score, 
+                       'global_feature': features,
+                       'local_feature': bned_features}
+        return return_dict
+
+# Part Model proposed in Yifan Sun etal. (2018)
+class PCB(nn.Module):
+    def __init__(self, class_num ):
+        super(PCB, self).__init__()
+
+        self.part = 4 # We cut the pool5 to 4 parts
+        model_ft = models.resnet50(pretrained=True)
+        self.model = model_ft
+        self.avgpool = nn.AdaptiveAvgPool2d((self.part,1))
+        self.dropout = nn.Dropout(p=0.5)
+        # remove the final downsample
+        self.model.layer4[0].downsample[0].stride = (1,1)
+        self.model.layer4[0].conv2.stride = (1,1)
+        self.softmax = nn.Softmax(dim=1)
+        # define 4 classifiers
+        for i in range(self.part):
+            name = 'classifier'+str(i)
+            setattr(self, name, ClassBlock(2048, class_num, True, False, 256))
+
+    def forward(self, x):
+        x = self.model.conv1(x)
+        x = self.model.bn1(x)
+        x = self.model.relu(x)
+        x = self.model.maxpool(x)
         
+        x = self.model.layer1(x)
+        x = self.model.layer2(x)
+        x = self.model.layer3(x)
+        x = self.model.layer4(x)
+        x = self.avgpool(x)
+        f = x
+        f = f.view(f.size(0),f.size(1)*self.part)
+        x = self.dropout(x)
+        part = {}
+        predict = {}
+        # get part feature batchsize*2048*4
+        for i in range(self.part):
+            part[i] = x[:,:,i].contiguous()
+            part[i] = part[i].view(x.size(0), x.size(1))
+            name = 'classifier'+str(i)
+            c = getattr(self,name)
+            predict[i] = c(part[i])
+
+        y=[]
+        for i in range(self.part):
+            y.append(predict[i])
+
+        return f, y
+
+class PCB_ReID(nn.Module):
+    def __init__(self,
+                 backbone='resnet-101',
+                 skip_connection=config.SKIP_CONNECTION,
+                 classifier_input_dim=2048,
+                 classifier_output_dim=config.DUKE_CLASS_NUM,
+                 use_cuda=True,
+                 local_conv_out_channels=128):
+        super(PCB_ReID, self).__init__()
+        
+        self.part = 1
+        self.extractor = PCB_extractor(backbone=backbone, stride=1, part_num=self.part)
+
+        self.skip_connection = skip_connection
+
+#         self.classifier = Classifier(input_dim=classifier_input_dim,
+#                                      output_dim=classifier_output_dim)
+
+        for i in range(self.part):
+            name = 'classifier'+str(i)
+            setattr(self, name, BNClassifier(classifier_input_dim, classifier_output_dim))
+
+        if use_cuda:
+            self.extractor = self.extractor.cuda()
+#             self.classifier = self.classifier.cuda()
+            for i in range(self.part):
+                name = 'classifier'+str(i)
+                c = getattr(self,name)
+                c = c.cuda()
+    
+ 
+    def forward(self, data):
+        
+        x, feat = self.extractor(data)
+        part = {}
+        predict = {}
+        local_predict = {}
+        local_f = []
+        # get part feature batchsize*2048*4
+        for i in range(self.part):
+            part[i] = x[:,:,i].contiguous()
+            part[i] = part[i].view(x.size(0), x.size(1))
+#             local_f.append(part[i])
+            name = 'classifier'+str(i)
+            c = getattr(self,name)
+            local_predict[i], predict[i]= c(part[i])
+            local_f.append(local_predict[i])
+
+        y=[]
+        for i in range(self.part):
+            y.append(predict[i])
+
+#         local_feature = x.view(feat.size(0),feat.size(1),self.part)
+
+        return_dict = {'cls_vectors': y, 
+                       'global_feature': feat,
+                       'local_feature': local_f}
+
+        return return_dict
+    
+    
 class Sense_ReID(nn.Module):
     def __init__(self,
                  backbone='resnet-101',
@@ -254,13 +523,25 @@ class Sense_ReID(nn.Module):
                  local_conv_out_channels=128):
         super(Sense_ReID, self).__init__()
 
-        self.structure_extractor = ft_netAB(backbone=backbone)
-#         self.color_extractor = ft_netAB(backbone=backbone)
+#         self.structure_extractor = Extractor_v2(backbone=backbone)
+        # self.structure_extractor = ft_netAB(backbone=backbone)
+
+        self.color_extractor = Extractor_v2(backbone=backbone,class_num=classifier_output_dim)
+        # self.color_extractor = ft_net(class_num=classifier_output_dim)
+        
+        # self.color_extractor = ft_netAB(backbone=backbone)
+
 
         self.skip_connection = skip_connection
 
-        self.structure_classifier = Classifier(input_dim=classifier_input_dim,
+        # self.structure_classifier = Classifier(input_dim=classifier_input_dim,
+        #                              output_dim=classifier_output_dim)
+        self.structure_classifier = Classifier(input_dim=128,
                                      output_dim=classifier_output_dim)
+
+        self.D_domain = FCDiscriminator_img(num_classes=128) # Need to know the channel
+        # self.structure_classifier = Classifier(input_dim=128,
+        #                              output_dim=classifier_output_dim)
         
 #         self.color_classifier = Classifier(input_dim=classifier_input_dim,
 #                                      output_dim=classifier_output_dim)
@@ -285,89 +566,71 @@ class Sense_ReID(nn.Module):
         self.generator = AdaINGen(input_dim_a, gen_params, fp16 = False)  # auto-encoder for domain a
         self.gen_a = self.generator
         self.gen_b = self.generator
-
+        
+        
         if use_cuda:
-            self.structure_extractor = self.structure_extractor.cuda()
+            # self.structure_extractor = self.structure_extractor.cuda()
+            self.color_extractor = self.color_extractor.cuda()
             self.structure_classifier = self.structure_classifier.cuda()
             self.generator = self.generator.cuda()
-        
-    
-#     def get_partfeature(self, x, b):
-#         f = self.partpool(x)
-#         f = f.view(f.size(0),f.size(1)*self.part)
-#         f = f.detach() # no gradient 
-#         return f
-    
-#     def get_classfeature(self, x):
-#         tmp = self.avgpool(x)
-#         p = self.classifier(tmp)
-        
-#         return p
+            self.D_domain = self.D_domain.cuda()
+        self.color_a = self.color_b = self.color_extractor
         
     
     def forward(self, images_a, images_b, pos_a, pos_b):
 
-#         features = self.color_extractor(data=data)
+        sc_a = self.gen_a.encode((images_a)) # structure color fearture
+        sc_b = self.gen_b.encode((images_b)) # structure color feature
 
-#         extracted_feature = features[-1]
-        
-#         latent_feature = self.avgpool(extracted_feature)
 
-#         cls_vector = self.classifier(data=latent_feature)
-        
-        
-        self.id_a = self.id_b = self.structure_extractor
-        
-#         s_a = self.gen_a.encode(self.single(x_a))
-#         s_b = self.gen_b.encode(self.single(x_b))
+        s_a = self.gen_a.encode(to_grays(images_a)) # structure gray fearture
+        s_b = self.gen_b.encode(to_grays(images_b)) # structure gray feature
 
-        s_a = self.gen_a.encode(images_a) #Extract the color
-        s_b = self.gen_b.encode(images_b)
-        
-#         f_a, p_a = self.id_a(scale2(x_a))
-#         f_b, p_b = self.id_b(scale2(x_b))
-        
-        f_a, p_a = self.id_a(to_grays(images_a))
-        f_b, p_b = self.id_b(to_grays(images_b))
-        
-#         f_a = self.get_partfeature(feat_a)
-#         f_b = self.get_partfeature(feat_b)
-        
-        x_ba = self.gen_a.decode(s_b, f_a)
-        x_ab = self.gen_b.decode(s_a, f_b)
-        
-        x_a_recon = self.gen_a.decode(s_a, f_a)
-        x_b_recon = self.gen_b.decode(s_b, f_b)
-        
-        fp_a, pp_a = self.id_a(to_grays(pos_a))
-        fp_b, pp_b = self.id_b(to_grays(pos_b))
-#         feat_p_a = self.id_a(pos_a)[-1]
-#         feat_p_b = self.id_b(pos_b)[-1]
-#         fp_a = self.get_partfeature(feat_p_a)
-#         fp_b = self.get_partfeature(feat_p_b)
+        c_a, p_a , _  = self.color_a(images_a) #Extract the color
+        c_b, p_b , _ = self.color_b(images_b)
 
-        # decode the same person
-        x_a_recon_p = self.gen_a.decode(s_a, fp_a)
-        x_b_recon_p = self.gen_b.decode(s_b, fp_b)
-        
-        
-        p_a = self.structure_classifier(p_a)
-        p_b = self.structure_classifier(p_b)
-        
-        pp_a = self.structure_classifier(pp_a)
-        pp_b = self.structure_classifier(pp_b)
-        
 
-#         return_dict = {'latent_vector': latent_feature, 
-#                        'cls_vector': cls_vector, 
-#                        'global_feature': global_feat, 
-#                        'local_feature': local_feat}
+        # f_a, p_a = self.id_a(scale2(x_a))
+        # f_b, p_b = self.id_b(scale2(x_b))
 
-        return x_ab, x_ba, s_a, s_b, f_a, f_b, p_a, p_b, pp_a, pp_b, x_a_recon, x_b_recon, x_a_recon_p, x_b_recon_p
+        x_ba = self.gen_a.decode(s_b, c_a)
+        x_ab = self.gen_b.decode(s_a, c_b)
+
+        x_a_recon = self.gen_a.decode(s_a, c_a)
+        x_b_recon = self.gen_b.decode(s_b, c_b)
+
+
+        # fp_a, pp_a = self.id_a(scale2(xp_a))
+        # fp_b, pp_b = self.id_b(scale2(xp_b))
+
+        cp_a, pp_a , _  = self.color_a(pos_a) #Extract the color
+        cp_b, pp_b , _ = self.color_b(pos_b)
+
+
+
+        # # decode the same person
+        x_a_recon_p = self.gen_a.decode(s_a, cp_a)
+        x_b_recon_p = self.gen_b.decode(s_b, cp_b)
+        
+        ss_a = self.gen_a.encode(to_grays(pos_a)) # structure fearture
+        ss_b = self.gen_b.encode(to_grays(pos_b)) # structure feature
+
+
+
+        sp_a = self.structure_classifier(s_a)
+        sp_b = self.structure_classifier(s_b)
+        
+        ssp_a = self.structure_classifier(ss_a)
+        ssp_b = self.structure_classifier(ss_b)
+
+
+        # return x_ab, x_ba, c_a, c_b, f_a, f_b, p_a, p_b, pp_a, pp_b, x_a_recon, x_b_recon, x_a_recon_p, x_b_recon_p
+        # return x_ab, x_ba, c_a, c_b, f_a, f_b, p_a, p_b, pp_a, pp_b, x_a_recon, x_b_recon, x_a_recon_p, x_b_recon_p
+        return x_ab, x_ba, s_a, s_b, c_a, c_b, p_a, p_b, pp_a, pp_b, x_a_recon, x_b_recon, x_a_recon_p, x_b_recon_p, sp_a, sp_b, ssp_a, ssp_b, sc_a, sc_b
         return return_dict        
 
 ##################################################################################
-# New modules to be used
+# New modules added start line
 ##################################################################################
 
 class AdaINGen(nn.Module):
@@ -388,9 +651,15 @@ class AdaINGen(nn.Module):
         non_local = params['non_local']
 
         # content encoder
+        # self.enc_content = ContentEncoder_ImageNet()
+
+        # n_downsample = 4
         self.enc_content = ContentEncoder(n_downsample, n_res, input_dim, dim, 'in', activ, pad_type=pad_type, dropout=dropout, tanh=tanh, res_type='basic')
 
         self.output_dim = self.enc_content.output_dim
+        print(self.output_dim)
+        # self.output_dim = 128
+        
         if which_dec =='basic':        
             self.dec = Decoder(n_downsample, n_res, self.output_dim, 3, dropout=dropout, res_norm='adain', activ=activ, pad_type=pad_type, res_type='basic', non_local = non_local, fp16 = fp16)
         elif which_dec =='slim':
@@ -415,13 +684,15 @@ class AdaINGen(nn.Module):
 
         self.apply(weights_init(params['init']))
 
-    def encode(self, images):
+    def encode(self, images): # structure
         # encode an image to its content and style codes
         content = self.enc_content(images)
         return content
 
     def decode(self, content, ID):
         # decode style codes to an image
+        # The feature from PCB (?)
+
         ID1 = ID[:,:2048]
         ID2 = ID[:,2048:4096]
         ID3 = ID[:,4096:6144]
@@ -513,7 +784,7 @@ class ContentEncoder(nn.Module):
         self.model += [Conv2dBlock(dim, 2*dim, 3, 1, 1, norm=norm, activation=activ, pad_type=pad_type)]
         dim *=2 # 32dim
         # downsampling blocks
-        for i in range(n_downsample-1):
+        for i in range(n_downsample-1): 
             self.model += [Conv2dBlock(dim, dim, 3, 1, 1, norm=norm, activation=activ, pad_type=pad_type)]
             self.model += [Conv2dBlock(dim, 2 * dim, 3, 2, 1, norm=norm, activation=activ, pad_type=pad_type)]
             dim *= 2
@@ -531,14 +802,14 @@ class ContentEncoder(nn.Module):
         return self.model(x)
 
 class ContentEncoder_ImageNet(nn.Module):
-    def __init__(self, n_downsample, n_res, input_dim, dim, norm, activ, pad_type):
+    def __init__(self):
         super(ContentEncoder_ImageNet, self).__init__()
         self.model = models.resnet50(pretrained=True)
         # remove the final downsample
         self.model.layer4[0].downsample[0].stride = (1,1)
         self.model.layer4[0].conv2.stride = (1,1) 
         # (256,128) ----> (16,8)
-
+        self.output_dim = 2048
     def forward(self, x):
         x = self.model.conv1(x)
         x = self.model.bn1(x)
@@ -548,6 +819,8 @@ class ContentEncoder_ImageNet(nn.Module):
         x = self.model.layer2(x)
         x = self.model.layer3(x)
         x = self.model.layer4(x)
+
+        
         return x
 
     
@@ -1013,12 +1286,90 @@ class ft_netAB(nn.Module):
         
         return f, x
 
+class PCB_extractor(nn.Module):
+    def __init__(self, backbone='resnet-50', norm=False, stride=1, droprate=0.5, pool='avg', part_num=4):
+        super(PCB_extractor, self).__init__()
+        model_ft = models.resnet50(pretrained=True)
+        self.part = part_num
+        if pool=='max':
+            model_ft.partpool = nn.AdaptiveMaxPool2d((self.part,1))
+            model_ft.avgpool = nn.AdaptiveMaxPool2d((1,1))
+        else:
+            model_ft.partpool = nn.AdaptiveAvgPool2d((self.part,1))
+            model_ft.avgpool = nn.AdaptiveAvgPool2d((1,1))
 
-class Extractor(nn.Module):
+        self.model = model_ft
+
+        if stride == 1:
+            self.model.layer4[0].downsample[0].stride = (1,1)
+            self.model.layer4[0].conv2.stride = (1,1)
+
+    def forward(self, x):
+        x = self.model.conv1(x)
+        x = self.model.bn1(x)
+        x = self.model.relu(x)
+        x = self.model.maxpool(x)
+        x = self.model.layer1(x)
+        x = self.model.layer2(x)
+        x = self.model.layer3(x)
+        x = self.model.layer4(x)
+        f = self.model.partpool(x)
+        x = self.model.avgpool(x)
+        x = x.view(x.size(0), x.size(1))
+        
+        return f, x    
+
+# Define the ResNet50-based Model
+class ft_net(nn.Module):
+
+    def __init__(self, class_num, norm=False, pool='avg', stride=2):
+        super(ft_net, self).__init__()
+        if norm:
+            self.norm = True
+        else:
+            self.norm = False
+        model_ft = models.resnet50(pretrained=True)
+        # avg pooling to global pooling
+        self.part = 4
+        if pool=='max':
+            model_ft.partpool = nn.AdaptiveMaxPool2d((self.part,1)) 
+            model_ft.avgpool = nn.AdaptiveMaxPool2d((1,1))
+        else:
+            model_ft.partpool = nn.AdaptiveAvgPool2d((self.part,1)) 
+            model_ft.avgpool = nn.AdaptiveAvgPool2d((1,1))
+        # remove the final downsample
+        if stride == 1:
+            model_ft.layer4[0].downsample[0].stride = (1,1)
+            model_ft.layer4[0].conv2.stride = (1,1)
+
+        self.model = model_ft   
+        self.classifier = ClassBlock(2048, class_num)
+
+    def forward(self, x):
+        x = self.model.conv1(x)
+        x = self.model.bn1(x)
+        x = self.model.relu(x)
+        x = self.model.maxpool(x)
+        x = self.model.layer1(x)
+        x = self.model.layer2(x)  # -> 512 32*16
+        x = self.model.layer3(x)
+        x = self.model.layer4(x)
+        f = self.model.partpool(x) # 8 * 2048 4*1
+        x = self.model.avgpool(x)  # 8 * 2048 1*1
+        
+        x = x.view(x.size(0),x.size(1))
+        f = f.view(f.size(0),f.size(1)*self.part)
+        if self.norm:
+            fnorm = torch.norm(f, p=2, dim=1, keepdim=True) + 1e-8
+            f = f.div(fnorm.expand_as(f))
+        x = self.classifier(x)
+        return f, x
+
+class Extractor_v2(nn.Module):
     def __init__(self,
-                 backbone='resnet-101',
-                 skip_connection=config.SKIP_CONNECTION):
-        super(Extractor, self).__init__()
+                 backbone='resnet-101',class_num=155,
+                 skip_connection=config.SKIP_CONNECTION, norm=False, stride=2, droprate=0.5, pool='avg'):
+        super(Extractor_v2, self).__init__()
         self.skip_connection = skip_connection
         if backbone == 'resnet-50':
             self.model = models.resnet50(pretrained=True)
@@ -1031,15 +1382,56 @@ class Extractor(nn.Module):
             self.model = nn.Sequential(*list(self.model.children())[:-2])
             #self.skip_idx = ['2', '4', '5', '6', '7', '8']
             self.skip_idx = ['2', '4', '5', '6', '7']
+        
+        self.part = 4
+        if pool=='max':
+            self.partpool = nn.AdaptiveMaxPool2d((self.part,1))
+            self.avgpool = nn.AdaptiveMaxPool2d((1,1))
+            
+        else:
+            self.partpool = nn.AdaptiveAvgPool2d((self.part,1))
+            self.avgpool = nn.AdaptiveAvgPool2d((1,1))
+            self.fitpool = nn.AdaptiveAvgPool3d((128,64,32))
+        self.classifier = Classifier2(2048, class_num)
 
     def forward(self, data):
-        skip_features = []
-        for idx, module in self.model._modules.items():
-            data = module(data)
-            if idx in self.skip_idx:
-                skip_features.append(data)
+        x = self.model(data)
+        d = self.fitpool(x.repeat(1,1,8,8))
+        f = self.partpool(x)
+        f = f.view(f.size(0),f.size(1)*self.part)
+        f = f.detach() # no gradient 
+        x = self.avgpool(x)
+        x = x.view(x.size(0), x.size(1))
+        x = self.classifier(x)
+        # return f, x, d
+        return f, x, d
+    
+# class Extractor(nn.Module):
+#     def __init__(self,
+#                  backbone='resnet-101',
+#                  skip_connection=config.SKIP_CONNECTION):
+#         super(Extractor, self).__init__()
+#         self.skip_connection = skip_connection
+#         if backbone == 'resnet-50':
+#             self.model = models.resnet50(pretrained=True)
+#             self.model = nn.Sequential(*list(self.model.children())[:-2])
+#             #self.skip_idx = ['2', '4', '5', '6', '7', '8']
+#             self.skip_idx = ['2', '4', '5', '6', '7']
         
-        return skip_features
+#         elif backbone == 'resnet-101':
+#             self.model = models.resnet101(pretrained=True)
+#             self.model = nn.Sequential(*list(self.model.children())[:-2])
+#             #self.skip_idx = ['2', '4', '5', '6', '7', '8']
+#             self.skip_idx = ['2', '4', '5', '6', '7']
+
+#     def forward(self, data):
+#         skip_features = []
+#         for idx, module in self.model._modules.items():
+#             data = module(data)
+#             if idx in self.skip_idx:
+#                 skip_features.append(data)
+        
+#         return skip_features
 
 class Classifier(nn.Module):
     def __init__(self,
@@ -1049,177 +1441,200 @@ class Classifier(nn.Module):
         self.linear = nn.Linear(input_dim, output_dim)
         self.softmax = nn.Softmax(dim=1)
         self.batch_norm =  nn.BatchNorm1d(input_dim)
-       
+        self.avgpool = nn.AdaptiveAvgPool2d((1,1))
 
     def forward(self, data):
+        x = data
+        x = self.avgpool(x)
+        x = x.view(x.size(0), x.size(1))
+        data = x
         data = data.view(data.size()[0],-1)
         data = self.batch_norm(data)
         out = self.linear(data)
         return out
     
-    
+class Classifier2(nn.Module):
+    def __init__(self,
+                 input_dim=2048,
+                 output_dim=config.DUKE_CLASS_NUM):
+        super(Classifier2, self).__init__()
+        self.linear = nn.Linear(input_dim, output_dim)
+        self.softmax = nn.Softmax(dim=1)
+        self.batch_norm =  nn.BatchNorm1d(input_dim)
+        # self.avgpool = nn.AdaptiveAvgPool2d((1,1))
+
+    def forward(self, data):
+        # x = data
+        # x = self.avgpool(x)
+        # x = x.view(x.size(0), x.size(1))
+        # data = x
+        data = data.view(data.size()[0],-1)
+        data = self.batch_norm(data)
+        out = self.linear(data)
+        return out
     
 class AdaptVAEReID(nn.Module):
-    def __init__(self,
-                 backbone='resnet-101',
-                 skip_connection=config.SKIP_CONNECTION,
-                 classifier_input_dim=2048,
-                 classifier_output_dim=config.DUKE_CLASS_NUM,
-                 use_cuda=True,
-                 local_conv_out_channels=128,mu_dim=2048, code_dim=config.DUKE_CLASS_NUM):
-        super(AdaptVAEReID, self).__init__()
+    pass
+#     def __init__(self,
+#                  backbone='resnet-101',
+#                  skip_connection=config.SKIP_CONNECTION,
+#                  classifier_input_dim=2048,
+#                  classifier_output_dim=config.DUKE_CLASS_NUM,
+#                  use_cuda=True,
+#                  local_conv_out_channels=128,mu_dim=2048, code_dim=config.DUKE_CLASS_NUM):
+#         super(AdaptVAEReID, self).__init__()
 
-        self.extractor = Extractor(backbone=backbone)
+#         self.extractor = Extractor(backbone=backbone)
         
-        self.code_dim = code_dim
-        self.mu_dim = mu_dim
-        self.skip_connection = skip_connection
+#         self.code_dim = code_dim
+#         self.mu_dim = mu_dim
+#         self.skip_connection = skip_connection
         
-#         self.enc_mu = nn.Conv2d(classifier_input_dim, self.mu_dim, kernel_size=4, stride=2,padding=1)
-#         self.enc_logvar = nn.Conv2d(classifier_input_dim, self.mu_dim, kernel_size=4, stride=2,padding=1)
-        self.encode_mean_logvar = Encode_Mean_Logvar(input_channel = classifier_input_dim, output_channel = self.mu_dim)
+# #         self.enc_mu = nn.Conv2d(classifier_input_dim, self.mu_dim, kernel_size=4, stride=2,padding=1)
+# #         self.enc_logvar = nn.Conv2d(classifier_input_dim, self.mu_dim, kernel_size=4, stride=2,padding=1)
+#         self.encode_mean_logvar = Encode_Mean_Logvar(input_channel = classifier_input_dim, output_channel = self.mu_dim)
 
-        self.decoder = Res_Decoder(backbone=backbone, input_dim=self.mu_dim, code_dim=self.code_dim, skip_connection=self.skip_connection)
+#         self.decoder = Res_Decoder(backbone=backbone, input_dim=self.mu_dim, code_dim=self.code_dim, skip_connection=self.skip_connection)
 
-        self.classifier = Classifier(input_dim=classifier_input_dim,
-                                     output_dim=classifier_output_dim)
+#         self.classifier = Classifier(input_dim=classifier_input_dim,
+#                                      output_dim=classifier_output_dim)
 
         
 
-        self.avgpool = nn.AvgPool2d((8,4))
+#         self.avgpool = nn.AvgPool2d((8,4))
         
-        #local feature
-        self.local_conv = nn.Conv2d(classifier_input_dim, local_conv_out_channels, 1)
-        self.local_bn = nn.BatchNorm2d(local_conv_out_channels)
-        self.local_relu = nn.ReLU()
+#         #local feature
+#         self.local_conv = nn.Conv2d(classifier_input_dim, local_conv_out_channels, 1)
+#         self.local_bn = nn.BatchNorm2d(local_conv_out_channels)
+#         self.local_relu = nn.ReLU()
 
-        if use_cuda:
-            self.extractor = self.extractor.cuda()
-            self.decoder = self.decoder.cuda()
-            self.classifier = self.classifier.cuda()
-            self.local_conv = self.local_conv.cuda()
-            self.local_bn = self.local_bn.cuda()
-            self.local_relu = self.local_relu.cuda()
-#             self.enc_mu = self.enc_mu.cuda()
-#             self.enc_logvar = self.enc_logvar.cuda()
-            self.encode_mean_logvar = self.encode_mean_logvar.cuda()
+#         if use_cuda:
+#             self.extractor = self.extractor.cuda()
+#             self.decoder = self.decoder.cuda()
+#             self.classifier = self.classifier.cuda()
+#             self.local_conv = self.local_conv.cuda()
+#             self.local_bn = self.local_bn.cuda()
+#             self.local_relu = self.local_relu.cuda()
+# #             self.enc_mu = self.enc_mu.cuda()
+# #             self.enc_logvar = self.enc_logvar.cuda()
+#             self.encode_mean_logvar = self.encode_mean_logvar.cuda()
             
             
     
-    def decode(self, z, insert_attrs = None, features=None):
+#     def decode(self, z, insert_attrs = None, features=None):
         
-        if len(z.size()) != 4:
-            z = z.view(z.size()[0],self.mu_dim,4,2)
-
-        if insert_attrs is not None:
-            if len(z.size()) == 2:
-                z = torch.cat([z,insert_attrs],dim=1)
-            else:
-                H,W = z.size()[2], z.size()[3]
-                z = torch.cat([z,insert_attrs.unsqueeze(-1).unsqueeze(-1).repeat(1,1,H,W)],dim=1)
-#                 print(z.size())
-        reconstruct, skip_features_dif, skip_features_ori = self.decoder(data=z, features=features)
-       
-        return reconstruct, skip_features_dif, skip_features_ori
-    
-    def encode(self, x):
-#         for l in range(len(self.enc_layers)-1):
-#             if (self.enc_layers[l] == 'fc')  and (len(x.size())>2):
-#                 batch_size = x.size()[0]
-#                 x = x.view(batch_size,-1)
-#             x = getattr(self, 'enc_'+str(l))(x)
-
-#         if (self.enc_layers[-1] == 'fc')  and (len(x.size())>2):
-#             batch_size = x.size()[0]
-#             x = x.view(batch_size,-1)
-        features = self.extractor(data=x)
-        extracted_feature = features[-1]
-#         mu = self.enc_mu(extracted_feature)
-#         logvar = self.enc_logvar(extracted_feature)
-        mu, logvar =  self.encode_mean_logvar(extracted_feature)
-        if len(mu.size()) > 2:
-            mu = mu.view(mu.size()[0],-1)
-            logvar = logvar.view(mu.size()[0],-1)
-
-        return mu, logvar
-    
-
-    def reparameterize(self, mu, logvar):
-        if self.training:
-            std = logvar.mul(0.5).exp_()
-            eps = Variable(std.data.new(std.size()).normal_())
-            return eps.mul(std).add_(mu)
-        else:
-            return mu
-    
- 
-    def forward(self, data, insert_attrs=None, return_enc=False):
-
-        features = self.extractor(data=data)
-
-        extracted_feature = features[-1]
-        
-        mu, logvar =  self.encode_mean_logvar(extracted_feature)
-#         mu = self.enc_mu(extracted_feature)
-#         logvar = self.enc_logvar(extracted_feature)
-
-        latent_feature = self.avgpool(extracted_feature)
-
-        cls_vector = self.classifier(data=latent_feature)
-        
-        
-        
-        if len(mu.size()) > 2:
-            mu = mu.view(mu.size()[0],-1)
-            logvar = logvar.view(mu.size()[0],-1)
-        z = self.reparameterize(mu, logvar)
-#         z = Variable(mu.data.new(mu.size()).normal_())
-
-#         reconstruct = self.decoder(features=features)
-
-        if self.skip_connection:
-            skip_features = features
-        else:
-            skip_features = None
-    
-        if insert_attrs is not None:
-            reconstruct, skip_features_dif, skip_features_ori = self.decode(z, insert_attrs, features=skip_features)    
-        else:
-            reconstruct, skip_features_dif, skip_features_ori = self.decode(z, cls_vector, features=skip_features)
-            
-
-        
-        # shape [N, C]
-        global_feat = latent_feature.view(latent_feature.size(0), -1)
-        # shape [N, C, H, 1]
-        local_feat = torch.mean(extracted_feature, -1, keepdim=True)
-        local_feat = self.local_relu(self.local_bn(self.local_conv(local_feat)))
-        # shape [N, H, c]
-        local_feat = local_feat.squeeze(-1).permute(0, 2, 1)
-
-        #return latent_feature, features, cls_vector, reconstruct, global_feat, local_feat, mu, logvar
-        #return {'latent_vector': latent_feature, 
-
-        resolution_feature = features[-1]
-
-        return_dict = {'latent_vector': latent_feature, 
-                       'resolution_feature': resolution_feature, 
-                       'cls_vector': cls_vector, 
-                       'rec_image': reconstruct, 
-                       'global_feature': global_feat, 
-                       'local_feature': local_feat, 
-                       'mu': mu, 
-                       'logvar': logvar,
-                       'image': data,
-                       'features': skip_features_ori,
-                       'skip_e': skip_features_dif }
+#         if len(z.size()) != 4:
+#             z = z.view(z.size()[0],self.mu_dim,4,2)
 
 #         if insert_attrs is not None:
-#             return_dict['skip_e'] = skip_features_e
-#         else:
-#             return_dict['skip_e'] = cls_vector
+#             if len(z.size()) == 2:
+#                 z = torch.cat([z,insert_attrs],dim=1)
+#             else:
+#                 H,W = z.size()[2], z.size()[3]
+#                 z = torch.cat([z,insert_attrs.unsqueeze(-1).unsqueeze(-1).repeat(1,1,H,W)],dim=1)
+# #                 print(z.size())
+#         reconstruct, skip_features_dif, skip_features_ori = self.decoder(data=z, features=features)
+       
+#         return reconstruct, skip_features_dif, skip_features_ori
+    
+#     def encode(self, x):
+# #         for l in range(len(self.enc_layers)-1):
+# #             if (self.enc_layers[l] == 'fc')  and (len(x.size())>2):
+# #                 batch_size = x.size()[0]
+# #                 x = x.view(batch_size,-1)
+# #             x = getattr(self, 'enc_'+str(l))(x)
 
-        return return_dict
+# #         if (self.enc_layers[-1] == 'fc')  and (len(x.size())>2):
+# #             batch_size = x.size()[0]
+# #             x = x.view(batch_size,-1)
+#         features = self.extractor(data=x)
+#         extracted_feature = features[-1]
+# #         mu = self.enc_mu(extracted_feature)
+# #         logvar = self.enc_logvar(extracted_feature)
+#         mu, logvar =  self.encode_mean_logvar(extracted_feature)
+#         if len(mu.size()) > 2:
+#             mu = mu.view(mu.size()[0],-1)
+#             logvar = logvar.view(mu.size()[0],-1)
+
+#         return mu, logvar
+    
+
+#     def reparameterize(self, mu, logvar):
+#         if self.training:
+#             std = logvar.mul(0.5).exp_()
+#             eps = Variable(std.data.new(std.size()).normal_())
+#             return eps.mul(std).add_(mu)
+#         else:
+#             return mu
+    
+ 
+#     def forward(self, data, insert_attrs=None, return_enc=False):
+
+#         features = self.extractor(data=data)
+
+#         extracted_feature = features[-1]
+        
+#         mu, logvar =  self.encode_mean_logvar(extracted_feature)
+# #         mu = self.enc_mu(extracted_feature)
+# #         logvar = self.enc_logvar(extracted_feature)
+
+#         latent_feature = self.avgpool(extracted_feature)
+
+#         cls_vector = self.classifier(data=latent_feature)
+        
+        
+        
+#         if len(mu.size()) > 2:
+#             mu = mu.view(mu.size()[0],-1)
+#             logvar = logvar.view(mu.size()[0],-1)
+#         z = self.reparameterize(mu, logvar)
+# #         z = Variable(mu.data.new(mu.size()).normal_())
+
+# #         reconstruct = self.decoder(features=features)
+
+#         if self.skip_connection:
+#             skip_features = features
+#         else:
+#             skip_features = None
+    
+#         if insert_attrs is not None:
+#             reconstruct, skip_features_dif, skip_features_ori = self.decode(z, insert_attrs, features=skip_features)    
+#         else:
+#             reconstruct, skip_features_dif, skip_features_ori = self.decode(z, cls_vector, features=skip_features)
+            
+
+        
+#         # shape [N, C]
+#         global_feat = latent_feature.view(latent_feature.size(0), -1)
+#         # shape [N, C, H, 1]
+#         local_feat = torch.mean(extracted_feature, -1, keepdim=True)
+#         local_feat = self.local_relu(self.local_bn(self.local_conv(local_feat)))
+#         # shape [N, H, c]
+#         local_feat = local_feat.squeeze(-1).permute(0, 2, 1)
+
+#         #return latent_feature, features, cls_vector, reconstruct, global_feat, local_feat, mu, logvar
+#         #return {'latent_vector': latent_feature, 
+
+#         resolution_feature = features[-1]
+
+#         return_dict = {'latent_vector': latent_feature, 
+#                        'resolution_feature': resolution_feature, 
+#                        'cls_vector': cls_vector, 
+#                        'rec_image': reconstruct, 
+#                        'global_feature': global_feat, 
+#                        'local_feature': local_feat, 
+#                        'mu': mu, 
+#                        'logvar': logvar,
+#                        'image': data,
+#                        'features': skip_features_ori,
+#                        'skip_e': skip_features_dif }
+
+# #         if insert_attrs is not None:
+# #             return_dict['skip_e'] = skip_features_e
+# #         else:
+# #             return_dict['skip_e'] = cls_vector
+
+#         return return_dict
     
     
 class Baseline_ReID(nn.Module):
