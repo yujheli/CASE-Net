@@ -374,7 +374,11 @@ def main():
 #         target_dict = model(image)
         
         # x_ab, x_ba, c_a, c_b, f_a, f_b, p_a, p_b, pp_a, pp_b, x_a_recon, x_b_recon, x_a_recon_p, x_b_recon_p = model(images_a, images_b, pos_a, pos_b)
+        # x_ab, x_ba, s_a, s_b, c_a, c_b, p_a, p_b, pp_a, pp_b, x_a_recon, x_b_recon, x_a_recon_p, x_b_recon_p, sp_a, sp_b, ssp_a, ssp_b, sc_a, sc_b\
+        #      = model(images_a, images_b, pos_a, pos_b)
+
         x_ab, x_ba, s_a, s_b, c_a, c_b, p_a, p_b, pp_a, pp_b, x_a_recon, x_b_recon, x_a_recon_p, x_b_recon_p, sp_a, sp_b, ssp_a, ssp_b, sc_a, sc_b\
+            , sa_tri, sb_tri, sca_tri, scb_tri, ssa_tri, ssb_tri\
              = model(images_a, images_b, pos_a, pos_b)
         
         
@@ -495,8 +499,8 @@ def main():
         
         # loss_gen_recon_id = id_criterion(p_a_recon, l_a) + id_criterion(p_b_recon, l_b)
 
-        sp_a_recon = model.structure_classifier(s_a_recon)
-        sp_b_recon = model.structure_classifier(s_b_recon)
+        sp_a_recon, _ = model.structure_classifier(s_a_recon)
+        sp_b_recon, _ = model.structure_classifier(s_b_recon)
 
         loss_id = id_criterion(sp_a, l_a) + id_criterion(sp_b, l_b) + id_criterion(p_a, l_a) + id_criterion(p_b, l_b)
         
@@ -504,9 +508,17 @@ def main():
         
         loss_gen_recon_id = id_criterion(sp_a_recon, l_a) + id_criterion(sp_b_recon, l_b) + id_criterion(p_a_recon, l_a) + id_criterion(p_b_recon, l_b)
 
-        loss_tri = loss_triplet(sp_a, l_a) + loss_triplet(sp_b, l_b)
+        # loss_tri = loss_triplet(sp_a, l_a) + loss_triplet(sp_b, l_b)
 
-        loss_ptri = loss_triplet(ssp_a, l_a) + loss_triplet(ssp_b, l_b)
+        # loss_ptri = loss_triplet(ssp_a, l_a) + loss_triplet(ssp_b, l_b)
+
+
+        # loss_tri = loss_triplet(sp_a, l_a) + loss_triplet(sp_b, l_b)
+        loss_tri = loss_triplet(torch.cat([sa_tri,sb_tri,sca_tri,scb_tri]), torch.cat([l_a,l_b,l_a,l_b]))
+
+        # loss_ptri = loss_triplet(ssp_a, l_a) + loss_triplet(ssp_b, l_b)
+        # loss_ptri = loss_triplet(ssp_a, l_a) + loss_triplet(ssp_b, l_b)
+        loss_ptri = loss_triplet(torch.cat([ssa_tri,ssb_tri]), torch.cat([l_a,l_b]))
 
 
 

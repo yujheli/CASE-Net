@@ -615,19 +615,23 @@ class Sense_ReID(nn.Module):
         ss_a = self.gen_a.encode(to_grays(pos_a)) # structure fearture
         ss_b = self.gen_b.encode(to_grays(pos_b)) # structure feature
 
+        sp_a, sa_tri = self.structure_classifier(s_a)
+        sp_b, sb_tri = self.structure_classifier(s_b)
 
-
-        sp_a = self.structure_classifier(s_a)
-        sp_b = self.structure_classifier(s_b)
+        _, sca_tri = self.structure_classifier(sc_a)
+        _, scb_tri = self.structure_classifier(sc_b)
         
-        ssp_a = self.structure_classifier(ss_a)
-        ssp_b = self.structure_classifier(ss_b)
+        ssp_a, ssa_tri = self.structure_classifier(ss_a)
+        ssp_b, ssb_tri = self.structure_classifier(ss_b)
 
 
         # return x_ab, x_ba, c_a, c_b, f_a, f_b, p_a, p_b, pp_a, pp_b, x_a_recon, x_b_recon, x_a_recon_p, x_b_recon_p
         # return x_ab, x_ba, c_a, c_b, f_a, f_b, p_a, p_b, pp_a, pp_b, x_a_recon, x_b_recon, x_a_recon_p, x_b_recon_p
-        return x_ab, x_ba, s_a, s_b, c_a, c_b, p_a, p_b, pp_a, pp_b, x_a_recon, x_b_recon, x_a_recon_p, x_b_recon_p, sp_a, sp_b, ssp_a, ssp_b, sc_a, sc_b
-        return return_dict        
+        return x_ab, x_ba, s_a, s_b, c_a, c_b, p_a, p_b, pp_a, pp_b, x_a_recon, x_b_recon, x_a_recon_p, x_b_recon_p, sp_a, sp_b, ssp_a, ssp_b, sc_a, sc_b, sa_tri, sb_tri, sca_tri, scb_tri, ssa_tri, ssb_tri
+        # sc_a, sc_b
+        return return_dict
+
+           
 
 ##################################################################################
 # New modules added start line
@@ -804,12 +808,14 @@ class ContentEncoder(nn.Module):
 class ContentEncoder_ImageNet(nn.Module):
     def __init__(self):
         super(ContentEncoder_ImageNet, self).__init__()
-        self.model = models.resnet50(pretrained=True)
+        # self.model = models.resnet50(pretrained=True)
+        self.model = models.resnet34(pretrained=True)
         # remove the final downsample
         self.model.layer4[0].downsample[0].stride = (1,1)
         self.model.layer4[0].conv2.stride = (1,1) 
         # (256,128) ----> (16,8)
         self.output_dim = 2048
+        self.output_dim = 512
     def forward(self, x):
         x = self.model.conv1(x)
         x = self.model.bn1(x)
@@ -1451,7 +1457,7 @@ class Classifier(nn.Module):
         data = data.view(data.size()[0],-1)
         data = self.batch_norm(data)
         out = self.linear(data)
-        return out
+        return out, x
     
 class Classifier2(nn.Module):
     def __init__(self,
